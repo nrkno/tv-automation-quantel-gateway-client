@@ -13,11 +13,10 @@
 	"scripts": {
 		"build": "trash dist && yarn build:main",
 		"build:main": "tsc -p tsconfig.json",
-		"lint": "eslint . --ext .js,.ts",
+		"lint": "eslint ./src --ext .js,.ts",
 		"lint:fix": "yarn lint -- --fix",
 		"test": "jest test",
-		"test:coverage": "yarn test -- --coverage",
-		"start": "node server.js"
+		"test:coverage": "yarn test -- --coverage"
 	},
 	"author": "Johann Nymann <johan@superfly.tv>",
 	"contributors": [
