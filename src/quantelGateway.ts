@@ -50,7 +50,7 @@ export class QuantelGateway extends EventEmitter {
 		this._initialized = true
 	}
 
-	public async connectToISA(ISAUrl?: string): Promise<void> {
+	public async connectToISA(ISAUrl?: string): Promise<Q.ConnectionDetails> {
 		if (ISAUrl) {
 			this._ISAUrl = ISAUrl.replace(/^https?:\/\//, '') // trim any https://
 		}
@@ -149,7 +149,7 @@ export class QuantelGateway extends EventEmitter {
 		try {
 			return await this.sendServer('GET', `port/${portId}`)
 		} catch (e) {
-			if (e.status === 404) return null
+			if (this._isNotFoundAThing(e)) return null
 			throw e
 		}
 	}
@@ -177,7 +177,7 @@ export class QuantelGateway extends EventEmitter {
 		try {
 			return await this.sendZone<Q.ClipData>('GET', `clip/${clipId}`)
 		} catch (e) {
-			if (e.status === 404) return null
+			if (this._isNotFoundAThing(e)) return null
 			throw e
 		}
 	}
@@ -411,22 +411,19 @@ export class QuantelGateway extends EventEmitter {
 	private async _ensureGoodResponse<T>(
 		pResponse: Promise<T | QuantelErrorResponse>,
 		if404ThenNull: true
-	): Promise<T | QuantelErrorResponse | null>
+	): Promise<T | null>
 
 	private async _ensureGoodResponse<T>(
 		pResponse: Promise<T | QuantelErrorResponse>,
 		if404ThenNull?: boolean
-	): Promise<T | QuantelErrorResponse | null> {
-		const response = await pResponse // Wrapped in Promise.resolve due to for some reason, tslint doen't understand that pResponse is a Promise
+	): Promise<T | null> {
+		const response = await pResponse
 		if (this._isAnErrorResponse(response)) {
 			if (response.status === 404) {
 				if (if404ThenNull) {
 					return null
-				}
-				if ((response.message || '').match(/Not found\. Request/)) {
-					throw new Error(`${response.status} ${response.message}\n${response.stack}`)
 				} else {
-					return response
+					throw new Error(`${response.status} ${response.message}\n${response.stack}`)
 				}
 			} else {
 				throw new Error(`${response.status} ${response.message}\n${response.stack}`)
@@ -449,6 +446,13 @@ export class QuantelGateway extends EventEmitter {
 			_.isString(test.stack) &&
 			test.status !== 200
 		)
+	}
+
+	private _isNotFoundAThing(e: Error): boolean {
+		if (e.message.startsWith('404')) {
+			return (e.message || '').match('Not found. Request') === null
+		}
+		return false
 	}
 }
 
