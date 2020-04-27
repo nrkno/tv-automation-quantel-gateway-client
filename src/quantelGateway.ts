@@ -1,3 +1,4 @@
+import * as Q from './quantelTypes'
 import * as got from 'got'
 import { EventEmitter } from 'events'
 import * as _ from 'underscore'
@@ -9,20 +10,27 @@ export class QuantelGateway extends EventEmitter {
 	public checkStatusInterval: number = CHECK_STATUS_INTERVAL
 
 	private _gatewayUrl: string | undefined
-	private _initialized: boolean = false
+	private _initialized = false
 	private _ISAUrl: string | undefined
 	private _zoneId: string | undefined
 	private _serverId: number | undefined
 	private _monitorInterval: NodeJS.Timer | undefined
 
 	private _statusMessage: string | null = 'Initializing...' // null = all good
-	private _cachedServer?: Q.ServerInfo | null
+	private _cachedServer?: Q.ServerInfo | undefined
 
 	constructor() {
 		super()
 	}
 
-	public async init(gatewayUrl: string, ISAUrl: string, zoneId: string | undefined, serverId: number): Promise<void> {
+	public async init(
+		gatewayUrl: string,
+		ISAUrl: string,
+		zoneId: string | undefined,
+		serverId: number
+	): Promise<void> {
+		this._initialized = false // in case we are called again
+		this._cachedServer = undefined // reset in the event of a second calling
 		this._gatewayUrl = gatewayUrl.replace(/\/$/, '') // trim trailing slash
 		if (!this._gatewayUrl.match(/http/)) this._gatewayUrl = 'http://' + this._gatewayUrl
 
@@ -46,14 +54,18 @@ export class QuantelGateway extends EventEmitter {
 			this._ISAUrl = ISAUrl.replace(/^https?:\/\//, '') // trim any https://
 		}
 		if (!this._ISAUrl) throw new Error('Quantel connectToIsa: ISAUrl not set!')
-		return this._ensureGoodResponse(this.sendRaw('post', `connect/${encodeURIComponent(this._ISAUrl)}`))
+		return this._ensureGoodResponse(
+			this.sendRaw('post', `connect/${encodeURIComponent(this._ISAUrl)}`)
+		)
 	}
 	public dispose() {
 		if (this._monitorInterval) {
 			clearInterval(this._monitorInterval)
 		}
 	}
-	public monitorServerStatus(callbackOnStatusChange: (connected: boolean, errorMessage: string | null) => void) {
+	public monitorServerStatus(
+		callbackOnStatusChange: (connected: boolean, errorMessage: string | null) => void
+	) {
 		const getServerStatus = async (): Promise<string | null> => {
 			try {
 				if (!this._gatewayUrl) return `Gateway URL not set`
@@ -61,7 +73,7 @@ export class QuantelGateway extends EventEmitter {
 				if (!this._serverId) return `Server id not set`
 
 				const servers = await this.getServers(this._zoneId!)
-				const server = _.find(servers, s => s.ident === this._serverId)
+				const server = _.find(servers, (s) => s.ident === this._serverId)
 
 				if (!server) return `Server ${this._serverId} not present on ISA`
 				if (server.down) return `Server ${this._serverId} is down`
@@ -75,13 +87,13 @@ export class QuantelGateway extends EventEmitter {
 		}
 		const checkServerStatus = () => {
 			getServerStatus()
-				.then(statusMessage => {
+				.then((statusMessage) => {
 					if (statusMessage !== this._statusMessage) {
 						this._statusMessage = statusMessage
 						callbackOnStatusChange(statusMessage === null, statusMessage)
 					}
 				})
-				.catch(e => this.emit('error', e))
+				.catch((e) => this.emit('error', e))
 		}
 		this._monitorInterval = setInterval(() => {
 			checkServerStatus()
@@ -122,10 +134,10 @@ export class QuantelGateway extends EventEmitter {
 
 		const servers = await this.getServers(this._zoneId!)
 		const server =
-			_.find(servers, server => {
+			_.find(servers, (server) => {
 				return server.ident === this._serverId
 			}) || null
-		this._cachedServer = server
+		this._cachedServer = server ? server : undefined
 		return server
 	}
 
@@ -170,8 +182,16 @@ export class QuantelGateway extends EventEmitter {
 		return this.sendZone('get', `clip`, searchQuery)
 	}
 	public async getClipFragments(clipId: number): Promise<Q.ServerFragments>
-	public async getClipFragments(clipId: number, inPoint: number, outPoint: number): Promise<Q.ServerFragments> // Query fragments for a specific in-out range:
-	public async getClipFragments(clipId: number, inPoint?: number, outPoint?: number): Promise<Q.ServerFragments> {
+	public async getClipFragments(
+		clipId: number,
+		inPoint: number,
+		outPoint: number
+	): Promise<Q.ServerFragments> // Query fragments for a specific in-out range:
+	public async getClipFragments(
+		clipId: number,
+		inPoint?: number,
+		outPoint?: number
+	): Promise<Q.ServerFragments> {
 		if (inPoint !== undefined && outPoint !== undefined) {
 			return this.sendZone('get', `clip/${clipId}/fragments/${inPoint}-${outPoint}`)
 		} else {
@@ -207,8 +227,12 @@ export class QuantelGateway extends EventEmitter {
 	}
 	/** Start playing on a port */
 	public async portPlay(portId: string): Promise<Q.TriggerResult> {
-		const response = (await this.sendServer('post', `port/${portId}/trigger/START`)) as Q.TriggerResult
-		if (!response.success) throw Error(`Quantel trigger start: Server returned success=${response.success}`)
+		const response = (await this.sendServer(
+			'post',
+			`port/${portId}/trigger/START`
+		)) as Q.TriggerResult
+		if (!response.success)
+			throw Error(`Quantel trigger start: Server returned success=${response.success}`)
 		return response
 	}
 	/** Stop (pause) playback on a port. If stopAtFrame is provided, the playback will stop at the frame specified. */
@@ -216,7 +240,8 @@ export class QuantelGateway extends EventEmitter {
 		const response = (await this.sendServer('post', `port/${portId}/trigger/STOP`, {
 			offset: stopAtFrame
 		})) as Q.TriggerResult
-		if (!response.success) throw Error(`Quantel trigger stop: Server returned success=${response.success}`)
+		if (!response.success)
+			throw Error(`Quantel trigger stop: Server returned success=${response.success}`)
 		return response
 	}
 	/** Jump directly to a frame, note that this might cause flicker on the output, as the frames haven't been preloaded  */
@@ -224,7 +249,8 @@ export class QuantelGateway extends EventEmitter {
 		const response = (await this.sendServer('post', `port/${portId}/trigger/JUMP`, {
 			offset: jumpToFrame
 		})) as Q.JumpResult
-		if (!response.success) throw Error(`Quantel hard jump: Server returned success=${response.success}`)
+		if (!response.success)
+			throw Error(`Quantel hard jump: Server returned success=${response.success}`)
 		return response
 	}
 	/** Prepare a jump to a frame (so that those frames are preloaded into memory) */
@@ -232,20 +258,29 @@ export class QuantelGateway extends EventEmitter {
 		const response = (await this.sendServer('put', `port/${portId}/jump`, {
 			offset: jumpToFrame
 		})) as Q.JumpResult
-		if (!response.success) throw Error(`Quantel prepare jump: Server returned success=${response.success}`)
+		if (!response.success)
+			throw Error(`Quantel prepare jump: Server returned success=${response.success}`)
 		return response
 	}
 	/** After having preloading a jump, trigger the jump */
 	public async portTriggerJump(portId: string): Promise<Q.TriggerResult> {
-		const response = (await this.sendServer('post', `port/${portId}/trigger/JUMP`)) as Q.TriggerResult
-		if (!response.success) throw Error(`Quantel trigger jump: Server returned success=${response.success}`)
+		const response = (await this.sendServer(
+			'post',
+			`port/${portId}/trigger/JUMP`
+		)) as Q.TriggerResult
+		if (!response.success)
+			throw Error(`Quantel trigger jump: Server returned success=${response.success}`)
 		return response
 	}
 	/** Clear all fragments from a port.
 	 * If rangeStart and rangeEnd is provided, will clear the fragments for that time range,
 	 * if not, the fragments up until (but not including) the playhead, will be cleared
 	 */
-	public async portClearFragments(portId: string, rangeStart?: number, rangeEnd?: number): Promise<Q.WipeResult> {
+	public async portClearFragments(
+		portId: string,
+		rangeStart?: number,
+		rangeEnd?: number
+	): Promise<Q.WipeResult> {
 		const response = (await this.sendServer('delete', `port/${portId}/fragments`, {
 			start: rangeStart,
 			finish: rangeEnd
@@ -254,13 +289,28 @@ export class QuantelGateway extends EventEmitter {
 		return response
 	}
 
-	private async sendServer(method: Methods, resource: string, queryParameters?: QueryParameters, bodyData?: object) {
+	private async sendServer(
+		method: Methods,
+		resource: string,
+		queryParameters?: QueryParameters,
+		bodyData?: object
+	) {
 		return this.sendZone(method, `server/${this._serverId}/${resource}`, queryParameters, bodyData)
 	}
-	private async sendZone(method: Methods, resource: string, queryParameters?: QueryParameters, bodyData?: object) {
+	private async sendZone(
+		method: Methods,
+		resource: string,
+		queryParameters?: QueryParameters,
+		bodyData?: object
+	) {
 		return this.sendBase(method, `${this._zoneId}/${resource}`, queryParameters, bodyData)
 	}
-	private async sendBase(method: Methods, resource: string, queryParameters?: QueryParameters, bodyData?: object) {
+	private async sendBase(
+		method: Methods,
+		resource: string,
+		queryParameters?: QueryParameters,
+		bodyData?: object
+	) {
 		if (!this._initialized) {
 			throw new Error('Quantel not initialized yet')
 		}
@@ -322,7 +372,7 @@ export class QuantelGateway extends EventEmitter {
 				method,
 				json: bodyData,
 				timeout: CALL_TIMEOUT,
-			 	responseType: 'json'
+				responseType: 'json'
 			})
 			if (response.statusCode === 200) {
 				return response.body
@@ -334,7 +384,7 @@ export class QuantelGateway extends EventEmitter {
 		}
 	}
 	private urlQuery(url: string, params: QueryParameters = {}): string {
-		let queryString = _.compact(
+		const queryString = _.compact(
 			_.map(params, (value, key: string) => {
 				if (value !== undefined) {
 					return `${key}=${encodeURIComponent(value.toString())}`
@@ -347,7 +397,9 @@ export class QuantelGateway extends EventEmitter {
 	/**
 	 * If the response is an error, instead throw the error instead of returning it
 	 */
-	private async _ensureGoodResponse<T extends Promise<any>>(pResponse: T): Promise<T | QuantelErrorResponse>
+	private async _ensureGoodResponse<T extends Promise<any>>(
+		pResponse: T
+	): Promise<T | QuantelErrorResponse>
 	private async _ensureGoodResponse<T extends Promise<any>>(
 		pResponse: T,
 		if404ThenNull: true
@@ -444,375 +496,4 @@ export interface ClipSearchQuery {
 	PublishCompleted?: string
 
 	[index: string]: string | number | undefined
-}
-// Note: These typings are a copied from https://github.com/nrkno/tv-automation-quantel-gateway
-export namespace Q {
-	export type DateString = string // it's a string with an ISO-date in it
-
-	export interface ZoneInfo {
-		type: 'ZonePortal'
-		zoneNumber: number
-		zoneName: string
-		isRemote: boolean
-	}
-
-	export interface ServerInfo {
-		type: 'Server'
-		ident: number
-		down: boolean
-		name?: string
-		numChannels?: number
-		pools?: number[]
-		portNames?: string[]
-		chanPorts?: string[]
-	}
-
-	export interface PortRef {
-		serverID: number | string
-		portName: string
-	}
-
-	export interface PortInfo extends PortRef {
-		type?: 'PortInfo'
-		channelNo: number
-		portID?: number
-		audioOnly?: boolean
-		assigned?: boolean
-	}
-
-	export interface PortStatus extends PortRef {
-		type: 'PortStatus'
-		portID: number
-		refTime: string
-		portTime: string
-		speed: number
-		offset: number
-		status: string
-		endOfData: number
-		framesUnused: number
-		outputTime: string
-		channels: number[]
-		videoFormat: string
-	}
-
-	export interface ReleaseRef extends PortRef {
-		resetOnly?: boolean
-	}
-
-	export interface ReleaseStatus extends ReleaseRef {
-		type: 'ReleaseStatus'
-		released: boolean
-		resetOnly: boolean
-	}
-
-	export interface ClipRef {
-		clipID: number
-	}
-
-	export interface FragmentRef extends ClipRef {
-		start?: number
-		finish?: number
-	}
-
-	export interface PortFragmentRef extends PortRef {
-		start?: number
-		finish?: number
-	}
-
-	export interface ClipPropertyList {
-		// Use property 'limit' of type number to set the maximum number of values to return
-		[name: string]: string | number
-	}
-
-	export interface ClipDataSummary {
-		type: 'ClipDataSummary' | 'ClipData'
-		ClipID: number
-		ClipGUID: string
-		CloneId: number | null
-		Completed: DateString | null
-		Created: DateString // ISO-formatted date
-		Description: string
-		Frames: string // TODO ISA type is None ... not sure whether to convert to number
-		Owner: string
-		PoolID: number | null
-		Title: string
-	}
-
-	export interface ClipData extends ClipDataSummary {
-		type: 'ClipData'
-		Category: string
-		CloneZone: number | null
-		Destination: number | null
-		Expiry: DateString | null // ISO-formatted date
-		HasEditData: number | null
-		Inpoint: number | null
-		JobID: number | null
-		Modified: string | null
-		NumAudTracks: number | null
-		Number: number | null
-		NumVidTracks: number | null
-		Outpoint: number | null
-		PlaceHolder: boolean
-		PlayAspect: string
-		PublishedBy: string
-		Register: string
-		Tape: string
-		Template: number | null
-		UnEdited: number | null
-		PlayMode: string
-		MosActive: boolean
-		Division: string
-		AudioFormats: string
-		VideoFormats: string
-		Protection: string
-		VDCPID: string
-		PublishCompleted: DateString | null // ISO-formatted date
-	}
-
-	export interface ServerFragment {
-		type: string
-		trackNum: number
-		start: number
-		finish: number
-	}
-
-	export type ServerFragmentTypes =
-		| VideoFragment
-		| AudioFragment
-		| AUXFragment
-		| FlagsFragment
-		| TimecodeFragment
-		| AspectFragment
-		| CropFragment
-		| PanZoomFragment
-		| SpeedFragment
-		| MultiCamFragment
-		| CCFragment
-		| NoteFragment
-		| EffectFragment
-
-	export interface PositionData extends ServerFragment {
-		rushID: string
-		format: number
-		poolID: number
-		poolFrame: number
-		skew: number
-		rushFrame: number
-	}
-
-	export interface VideoFragment extends PositionData {
-		type: 'VideoFragment'
-	}
-
-	export interface AudioFragment extends PositionData {
-		type: 'AudioFragment'
-	}
-
-	export interface AUXFragment extends PositionData {
-		type: 'AUXFragment'
-	}
-
-	export interface FlagsFragment extends ServerFragment {
-		type: 'FlagsFragment'
-		flags: number
-	}
-
-	export interface TimecodeFragment extends ServerFragment {
-		startTimecode: string
-		userBits: number
-	}
-
-	export interface AspectFragment extends ServerFragment {
-		type: 'AspectFragment'
-		width: number
-		height: number
-	}
-
-	export interface CropFragment extends ServerFragment {
-		type: 'CropFragment'
-		x: number
-		y: number
-		width: number
-		height: number
-	}
-
-	export interface PanZoomFragment extends ServerFragment {
-		type: 'PanZoomFragment'
-		x: number
-		y: number
-		hZoom: number
-		vZoon: number
-	}
-
-	export interface SpeedFragment extends ServerFragment {
-		type: 'SpeedFragment'
-		speed: number
-		profile: number
-	}
-
-	export interface MultiCamFragment extends ServerFragment {
-		type: 'MultiCamFragment'
-		stream: number
-	}
-
-	export interface CCFragment extends ServerFragment {
-		type: 'CCFragment'
-		ccID: string
-		ccType: number
-		effectID: number
-	}
-
-	export interface NoteFragment extends ServerFragment {
-		type: 'NoteFragment'
-		noteID: number
-		aux: number
-		mask: number
-		note: string | null
-	}
-
-	export interface EffectFragment extends ServerFragment {
-		type: 'EffectFragment'
-		effectID: number
-	}
-
-	export interface ServerFragments extends ClipRef {
-		type: 'ServerFragments'
-		fragments: ServerFragmentTypes[]
-	}
-
-	export interface PortServerFragments extends ServerFragments, PortRef {
-		clipID: -1
-	}
-
-	export interface PortLoadInfo extends PortRef {
-		fragments: ServerFragmentTypes[]
-		offset?: number
-	}
-
-	export interface PortLoadStatus extends PortRef {
-		type: 'PortLoadStatus'
-		fragmentCount: number
-		offset: number
-	}
-
-	export enum Trigger {
-		START = 'START', // quantel.START
-		STOP = 'STOP', // quantel.STOP
-		JUMP = 'JUMP', // quantel.JUMP
-		TRANSITION = 'TRANSITION' // quantel.TRANSITION
-	}
-
-	export enum Priority {
-		STANDARD = 'STANDARD', // quantel.STANDARD
-		HIGH = 'HIGH' // quantel.HIGH
-	}
-
-	export interface TriggerInfo extends PortRef {
-		trigger: Trigger
-		offset?: number
-	}
-
-	export interface TriggerResult extends TriggerInfo {
-		type: 'TriggerResult'
-		success: boolean
-	}
-
-	export interface JumpInfo extends PortRef {
-		offset: number
-	}
-
-	export interface JumpResult extends JumpInfo {
-		type: 'HardJumpResult' | 'TriggeredJumpResult'
-		success: boolean
-	}
-
-	export interface ThumbnailSize {
-		width: number
-		height: number
-	}
-
-	export interface ThumbnailOrder extends ClipRef {
-		offset: number
-		stride: number
-		count: number
-	}
-
-	export interface ConnectionDetails {
-		type: string
-		isaIOR: string
-		href: string
-		refs: string[]
-		robin: number
-	}
-
-	export interface CloneRequest extends ClipRef {
-		poolID: number
-		highPriority?: boolean
-	}
-
-	export interface WipeInfo extends PortRef {
-		start?: number
-		frames?: number
-	}
-
-	export interface WipeResult extends WipeInfo {
-		type: 'WipeResult'
-		wiped: boolean
-	}
-
-	export interface FormatRef {
-		formatNumber: number
-	}
-
-	export interface FormatInfo extends FormatRef {
-		type: 'FormatInfo'
-		essenceType:
-			| 'VideoFragment'
-			| 'AudioFragment'
-			| 'AUXFragment'
-			| 'FlagsFragment'
-			| 'TimecodeFragment'
-			| 'AspectFragment'
-			| 'CropFragment'
-			| 'PanZoomFragment'
-			| 'MultiCamFragment'
-			| 'CCFragment'
-			| 'NoteFragment'
-			| 'EffectFragment'
-			| 'Unknown'
-		frameRate: number
-		height: number
-		width: number
-		samples: number
-		compressionFamily: number
-		protonsPerAtom: number
-		framesPerAtom: number
-		quark: number
-		formatName: string
-		layoutName: string
-		compressionName: string
-	}
-
-	export interface CloneInfo {
-		zoneID?: number // Source zone ID, omit for local zone
-		clipID: number // Source clip ID
-		poolID: number // Destination pool ID
-		priority?: number // Priority, between 0 (low) and 15 (high) - default is 8 (standard)
-		history?: boolean // Should an interzone clone link to historical provinance - default is true
-	}
-
-	export interface CloneResult extends CloneInfo {
-		type: 'CloneResult'
-		copyID: number
-		copyCreated: boolean
-	}
-
-	export interface CopyProgress extends ClipRef {
-		type: 'CopyProgress'
-		totalProtons: number
-		protonsLeft: number
-		secsLeft: number
-		priority: number
-		ticketed: boolean
-	}
 }
