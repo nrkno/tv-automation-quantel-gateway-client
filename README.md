@@ -10,4 +10,7 @@ A client-side library for the [Sofie Quantel Gateway](https://github.com/nrkno/t
 
 [MIT](./LICENSE).
 
-Copyright (c) 2019 Norsk rikskringkasting AS (NRK)
+
+---
+
+*The NRK logo is a registered trademark of Norsk rikskringkasting AS. The license does not grant any right to use, in any way, any trademarks, service marks or logos of Norsk rikskringkasting AS.*
