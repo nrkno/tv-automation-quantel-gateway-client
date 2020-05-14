@@ -57,6 +57,7 @@ export interface ReleaseStatus extends ReleaseRef {
 }
 
 export interface ClipRef {
+	/** Identifier of the clip this message refers to. */
 	clipID: number
 }
 
@@ -344,25 +345,51 @@ export interface FormatInfo extends FormatRef {
 	compressionName: string
 }
 
+/**
+ * Details of a request to clone a clip, if cloning is required.
+ */
 export interface CloneInfo {
-	zoneID?: number // Source zone ID, omit for local zone
-	clipID: number // Source clip ID
-	poolID: number // Destination pool ID
-	priority?: number // Priority, between 0 (low) and 15 (high) - default is 8 (standard)
-	history?: boolean // Should an interzone clone link to historical provinance - default is true
+	/** Source zone ID, for inter-zone copies only. Otherwise `undefined`. */
+	zoneID?: number
+	/** Identifier for the source clip. */
+	clipID: number
+	/** Target pool identifier. */
+	poolID: number
+	/** Priority level, a value between 0 (low) and 15 (high). Default is 8 (standard). */
+	priority?: number
+	/** For inter-zone cloning, should provenance be carried along with copy? Default is `true`. */
+	history?: boolean
 }
 
+/**
+ * Response to the request to clone a clip if it does not already exist on a given
+ * zone or pool, or the identifier of an existing useable clip.
+ */
 export interface CloneResult extends CloneInfo {
 	type: 'CloneResult'
+	/** Identifier of the target of the copy, which may be a pre-existing clip ID. */
 	copyID: number
+	/** Whether it was necessary to start a copy operation, otherwise a copy already existed. */
 	copyCreated: boolean
 }
 
+/**
+ * Details of the progress of a copy operation for a copy target with `clipID`.
+ */
 export interface CopyProgress extends ClipRef {
 	type: 'CopyProgress'
+	/** Total number of units of quantel storage. */
 	totalProtons: number
+	// TODO check this definition and Quantel gateway readme
+	/** Units of storage remaining to copy. `protonsLeft / totalProtons` is percentage remaining. */
 	protonsLeft: number
+	/**
+	 * If positive, estimate of the number of seconds remaining until the copy completes.
+	 * If negative, the number of seconds have passed since the copy completed.
+	 */
 	secsLeft: number
+	/** Relative priority of the copy, from 0 (low) to 15 (high). Default is 8 (standard). */
 	priority: number
+	/** Whether the copy operation was ticketed. Expect `false` as not implemented by Quantel gateway. */
 	ticketed: boolean
 }

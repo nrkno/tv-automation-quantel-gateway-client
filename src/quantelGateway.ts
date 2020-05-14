@@ -6,6 +6,8 @@ import * as _ from 'underscore'
 const CHECK_STATUS_INTERVAL = 3000
 const CALL_TIMEOUT = 1000
 
+const literal = <T>(t: T): T => t
+
 export class QuantelGateway extends EventEmitter {
 	public checkStatusInterval: number = CHECK_STATUS_INTERVAL
 
@@ -284,6 +286,59 @@ export class QuantelGateway extends EventEmitter {
 			finish: rangeEnd
 		})
 		if (!response.wiped) throw Error(`Quantel clear port: Server returned wiped=${response.wiped}`)
+		return response
+	}
+
+	/**
+	 * Request a clone of a clip, either between zones or between servers in the same zone.
+	 * The target zone ID is that of the servers the request is sent to.
+	 * @param zoneID Source zone ID, for inter-zone copies only. Otherwise `undefined`.
+	 * @param clipID Identifier for the source clip.
+	 * @param poolID Target pool identifier.
+	 * @param priority Priority level, a value between 0 (low) and 15 (high).  Default is 8 (standard).
+	 * @param history For inter-zone cloning, should provenance be carried along with copy? Default is `true`.
+	 * @returns Details of the copy, including a `copyID` identifier for the target copy.
+	 */
+	public async copyClip(
+		zoneID: number | undefined,
+		clipID: number,
+		poolID: number,
+		priority?: number,
+		history?: boolean
+	): Promise<Q.CloneResult> {
+		const response = await this.sendZone<Q.CloneResult>(
+			'POST',
+			'copy',
+			undefined,
+			literal<Q.CloneInfo>({
+				zoneID,
+				clipID,
+				poolID,
+				priority,
+				history
+			})
+		)
+		return response
+	}
+
+	/**
+	 * Requests details of an ongoing or completed copy operation.
+	 * Note that if the copy completed some time ago or an associated copy operation
+	 * did not exist, this will throw a _Not Found_ exception.
+	 * @param copyID Identifier of the target clip.
+	 * @returns Details of the progress of the copy.
+	 */
+	public async getCopyRemaining(copyID: number): Promise<Q.CopyProgress> {
+		const response = await this.sendZone<Q.CopyProgress>('GET', `copy/${copyID}`)
+		return response
+	}
+
+	/**
+	 * Get the details of all ongoing copy operations.
+	 * @returns List of all ongoing copy operations.
+	 */
+	public async getAllCopyOperations(): Promise<Q.CopyProgress[]> {
+		const response = await this.sendZone<Q.CopyProgress[]>('GET', 'copy')
 		return response
 	}
 
