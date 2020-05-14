@@ -8,8 +8,25 @@ const CALL_TIMEOUT = 1000
 
 const literal = <T>(t: T): T => t
 
+/**
+ * Remote connection to a [Sofie Quantel Gateway](https://github.com/nrkno/tv-automation-quantel-gateway). 
+ * Create and initialize a new connection as follows:
+ * 
+ *     const quantelClient = new QuantelGateway()
+ *     await quantelCient.init(
+ *         'quantel.gateway.url:port', 'quantel.isa.url', 'default', serverID)
+ * 
+ * If the serverID is not known, before calling `init()` request the details of all servers:
+ * 
+ *     await quantelClient.connectToISA('quantel.isa.url')
+ *     const servers = await quantelClient.getServers('default')
+ * 
+ * Then initialize the client as above.
+ * 
+ * Once finished with the class, call `dispose()`.
+ */
 export class QuantelGateway extends EventEmitter {
-	public checkStatusInterval: number = CHECK_STATUS_INTERVAL
+	public readonly checkStatusInterval: number = CHECK_STATUS_INTERVAL
 
 	private _gatewayUrl: string | undefined
 	private _initialized = false
@@ -21,10 +38,20 @@ export class QuantelGateway extends EventEmitter {
 	private _statusMessage: string | null = 'Initializing...' // null = all good
 	private _cachedServer?: Q.ServerInfo | undefined
 
+	/** Create a Quantel Gateway client. */
 	constructor() {
 		super()
 	}
 
+	/**
+	 * Initialize a Quantel Gateway client, making the required connections.
+	 * @param gatewayUrl Location of the associated Quantel Gateway.
+	 * @param ISAUrl Location of the ISA manager or comma separated list of ISA 
+	 * managers the gateway is to connect to. Default port of 2096 is assumed unless 
+	 * specified.
+	 * @param zoneId Zone identifier, or `undefined` for default.
+	 * @param serverId Identifier of the server to be controlled.
+	 */
 	public async init(
 		gatewayUrl: string,
 		ISAUrl: string,
@@ -52,6 +79,11 @@ export class QuantelGateway extends EventEmitter {
 		this._initialized = true
 	}
 
+	/**
+	 * Request that the Quantel Gateway connects to the given ISA manager.
+	 * @param ISAUrl Location of the ISA manager to connect to.
+	 * @returns Details of the connection created.
+	 */
 	public async connectToISA(ISAUrl?: string): Promise<Q.ConnectionDetails> {
 		if (ISAUrl) {
 			this._ISAUrl = ISAUrl.replace(/^https?:\/\//, '') // trim any https://

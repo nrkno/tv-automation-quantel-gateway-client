@@ -1,20 +1,36 @@
 export type DateString = string // it's a string with an ISO-date in it
 
+/**
+ * Details of a zone.
+ */
 export interface ZoneInfo {
 	type: 'ZonePortal'
+	/** Identifier for the zone. */
 	zoneNumber: number
+	/** Name of the zone. */
 	zoneName: string
+	/** Is the zone a remote zone? Otherwise it is locally managed. */
 	isRemote: boolean
 }
 
+/**
+ * Details of an SQ server.
+ */
 export interface ServerInfo {
 	type: 'Server'
+	/** Identifier of the server. */
 	ident: number
+	/** Is the server currently down (not running)? */
 	down: boolean
+	/** Name. */
 	name?: string
+	/** How many channels (SDI ports) does the server have. */
 	numChannels?: number
+	/** List of all the disk pools attached to the server. */
 	pools?: number[]
+	/** Currently assigned ports names. */
 	portNames?: string[]
+	/** Channel-indexed sparse array of mappings from channels to ports. */
 	chanPorts?: string[]
 }
 
@@ -289,11 +305,18 @@ export interface ThumbnailOrder extends ClipRef {
 	count: number
 }
 
+/**
+ * Details of a connection from a Quantel Gateway to an ISA manager.
+ */
 export interface ConnectionDetails {
-	type: string
+	type: 'ConnectionDetails'
+	/** CORBA-encoded ISA manager connection details. */
 	isaIOR: string
+	/** Location of the attached ISA manager. */
 	href: string
+	/** List of alternative ISA managers, e.g. master and backup. */
 	refs: string[]
+	/** Incrementing round robim counter used to select the next ISA manager on failure. */
 	robin: number
 }
 
