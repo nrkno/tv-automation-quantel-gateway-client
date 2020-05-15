@@ -9,20 +9,20 @@ const CALL_TIMEOUT = 1000
 const literal = <T>(t: T): T => t
 
 /**
- * Remote connection to a [Sofie Quantel Gateway](https://github.com/nrkno/tv-automation-quantel-gateway). 
+ * Remote connection to a [Sofie Quantel Gateway](https://github.com/nrkno/tv-automation-quantel-gateway).
  * Create and initialize a new connection as follows:
- * 
+ *
  *     const quantelClient = new QuantelGateway()
  *     await quantelCient.init(
  *         'quantel.gateway.url:port', 'quantel.isa.url', 'default', serverID)
- * 
+ *
  * If the serverID is not known, before calling `init()` request the details of all servers:
- * 
+ *
  *     await quantelClient.connectToISA('quantel.isa.url')
  *     const servers = await quantelClient.getServers('default')
- * 
+ *
  * Then initialize the client as above.
- * 
+ *
  * Once finished with the class, call `dispose()`.
  */
 export class QuantelGateway extends EventEmitter {
@@ -45,16 +45,20 @@ export class QuantelGateway extends EventEmitter {
 
 	/**
 	 * Initialize a Quantel Gateway client, making the required connections.
+	 *
+	 * Note that the master and backup (if specified) will be tried alternately
+	 * in the event that connection to one of them fails.
 	 * @param gatewayUrl Location of the associated Quantel Gateway.
-	 * @param ISAUrl Location of the ISA manager or comma separated list of ISA 
-	 * managers the gateway is to connect to. Default port of 2096 is assumed unless 
-	 * specified.
+	 * @param ISAUrlMaster Location of the ISA manager to be connected to first of all.
+	 * @param ISAUrlBackup Optional backup ISA manager for the gateway to switch to
+	 * in the event of failure of the master.
 	 * @param zoneId Zone identifier, or `undefined` for default.
 	 * @param serverId Identifier of the server to be controlled.
 	 */
 	public async init(
 		gatewayUrl: string,
-		ISAUrl: string,
+		ISAUrlMaster: string,
+		ISAUrlBackup: string | undefined,
 		zoneId: string | undefined,
 		serverId: number
 	): Promise<void> {
@@ -64,7 +68,7 @@ export class QuantelGateway extends EventEmitter {
 		if (!this._gatewayUrl.match(/http/)) this._gatewayUrl = 'http://' + this._gatewayUrl
 
 		// Connect to ISA:
-		await this.connectToISA(ISAUrl)
+		await this.connectToISA(ISAUrlMaster, ISAUrlBackup)
 		this._zoneId = zoneId || 'default'
 		this._serverId = serverId
 
@@ -81,12 +85,20 @@ export class QuantelGateway extends EventEmitter {
 
 	/**
 	 * Request that the Quantel Gateway connects to the given ISA manager.
-	 * @param ISAUrl Location of the ISA manager to connect to.
+	 * @param ISAUrlMaster Location of the ISA manager to be connected to first of all.
+	 * @param ISAUrlBackup Optional backup ISA manager for the gateway to switch to
+	 * in the event of failure of the master.
 	 * @returns Details of the connection created.
 	 */
-	public async connectToISA(ISAUrl?: string): Promise<Q.ConnectionDetails> {
-		if (ISAUrl) {
-			this._ISAUrl = ISAUrl.replace(/^https?:\/\//, '') // trim any https://
+	public async connectToISA(
+		ISAUrlMaster?: string,
+		ISAUrlBackup?: string
+	): Promise<Q.ConnectionDetails> {
+		if (ISAUrlMaster) {
+			this._ISAUrl = ISAUrlMaster.replace(/^https?:\/\//, '') // trim any https://
+			if (ISAUrlBackup) {
+				this._ISAUrl = this._ISAUrl + ',' + ISAUrlBackup.replace(/^https?:\/\//, '')
+			}
 		}
 		if (!this._ISAUrl) throw new Error('Quantel connectToIsa: ISAUrl not set!')
 		return this._ensureGoodResponse<Q.ConnectionDetails>(
@@ -94,12 +106,21 @@ export class QuantelGateway extends EventEmitter {
 		)
 	}
 
+	/**
+	 * Sefely dispose of the resources used by this client, stopping monitors.
+	 */
 	public dispose(): void {
 		if (this._monitorInterval) {
 			clearInterval(this._monitorInterval)
 		}
 	}
 
+	/**
+	 * Start the process of repeatedly monitoring the status of the attached
+	 * Quantel Gateway and onwards to an ISA manager.
+	 * @param callbackOnStatusChange Callback function called when
+	 * the connection status through to the ISA manager changes.
+	 */
 	public monitorServerStatus(
 		callbackOnStatusChange: (connected: boolean, errorMessage: string | null) => void
 	): void {
@@ -137,34 +158,58 @@ export class QuantelGateway extends EventEmitter {
 		}, this.checkStatusInterval)
 		checkServerStatus() // also run one right away
 	}
+	/** Is the client connected somehow? */
 	public get connected(): boolean {
 		return this._statusMessage === null
 	}
+	/**
+	 * Description of the status of the connection.
+	 * @returns Current status, or `null` if all is good.
+	 */
 	public get statusMessage(): string | null {
 		return this._statusMessage
 	}
+	/** Is this client initialized? */
 	public get initialized(): boolean {
 		return this._initialized
 	}
+	/** Location of the Quantel Gateway this client targets. */
 	public get gatewayUrl(): string {
 		return this._gatewayUrl || ''
 	}
+	/** Location of the ISA Manager or ISA managers the gateway can connect to. */
 	public get ISAUrl(): string {
 		return this._ISAUrl || ''
 	}
+	/** Get the zone identifier set for this client. */
 	public get zoneId(): string {
 		return this._zoneId || 'default'
 	}
+	/** Set the server to be controlled by this client. */
 	public get serverId(): number {
 		return this._serverId || 0
 	}
 
+	/**
+	 * List details of all zones the ISA Manager is connected to.
+	 * @returns Details of zones all connected zones.
+	 */
 	public async getZones(): Promise<Q.ZoneInfo[]> {
 		return this._ensureGoodResponse<Q.ZoneInfo[]>(this.sendRaw('GET', ''))
 	}
-	public async getServers(zoneId: string): Promise<Q.ServerInfo[]> {
+
+	/**
+	 * Get a list of all servers availabe within a zone.
+	 * @param zoneId Zone identifier. Omit for `default`.
+	 * @returns Details of all the servers within a zone.
+	 */
+	public async getServers(zoneId?: string): Promise<Q.ServerInfo[]> {
+		if (!zoneId) {
+			zoneId = 'default'
+		}
 		return this._ensureGoodResponse<Q.ServerInfo[]>(this.sendRaw('GET', `${zoneId}/server`))
 	}
+
 	/** Return the (possibly cached) server */
 	public async getServer(): Promise<Q.ServerInfo | null> {
 		if (this._cachedServer !== undefined) return this._cachedServer
@@ -178,7 +223,11 @@ export class QuantelGateway extends EventEmitter {
 		return server
 	}
 
-	/** Create a port and connect it to a channel */
+	/**
+	 * Retrieve details of an existing port.
+	 * @param portId Identifier for the port to query.
+	 * @returns Status of the port, including timings and current playing offset.
+	 */
 	public async getPort(portId: string): Promise<Q.PortStatus | null> {
 		try {
 			return await this.sendServer('GET', `port/${portId}`)
@@ -187,26 +236,42 @@ export class QuantelGateway extends EventEmitter {
 			throw e
 		}
 	}
+
 	/**
-	 * Create (allocate) a new port
+	 * Create (allocate) a new port (logical device) and connect it to a channel
+	 * (physical SDI connector).
+	 * @param portId Name of the port to create.
+	 * @param channelId Number of the physical channel to connect the port to.
+	 * "returns"
 	 */
 	public async createPort(portId: string, channelId: number): Promise<Q.PortInfo> {
 		return this.sendServer('PUT', `port/${portId}/channel/${channelId}`)
 	}
+
 	/**
-	 * Release (remove) an allocated port
+	 * Release (remove) an allocated port. This allows other applications to grab the
+	 * associated channels.
+	 * @param portId Identifier of port to remove.
+	 * @returns Reported status of the removal.
 	 */
 	public async releasePort(portId: string): Promise<Q.ReleaseStatus> {
 		return this.sendServer('DELETE', `port/${portId}`)
 	}
+
 	/**
-	 * Reset a port, this removes all fragments and resets the playhead of the port
+	 * Reset a port, removing all fragments and resetting the playhead of the port.
+	 * The port persists after reset, maintaining ownership of its associated channels.
+	 * @returns Status of the release.
 	 */
 	public async resetPort(portId: string): Promise<Q.ReleaseStatus> {
 		return this.sendServer('POST', `port/${portId}/reset`)
 	}
 
-	/** Get info about a clip */
+	/**
+	 * Get infomation about a clip.
+	 * @param clipId Identifier for the clip to query.
+	 * @returns Resolves with clip details or `null` if the clip is not found.
+	 */
 	public async getClip(clipId: number): Promise<Q.ClipData | null> {
 		try {
 			return await this.sendZone<Q.ClipData>('GET', `clip/${clipId}`)
@@ -215,10 +280,32 @@ export class QuantelGateway extends EventEmitter {
 			throw e
 		}
 	}
+
+	/**
+	 * Search for a clip using search query parameters, e.g. `{ Title: 'Trump loses hair' }`
+	 * @param searchQuery Details of the requested search.
+	 * @returns A list of zero or more search summaries, one for each matching clip.
+	 */
 	public async searchClip(searchQuery: ClipSearchQuery): Promise<Q.ClipDataSummary[]> {
 		return this.sendZone('GET', `clip`, searchQuery)
 	}
+
+	/**
+	 * Get all the fragments associated with a clip. A clip is a collection of
+	 * disk fragments. These fragments must be loaded onto a port to so that a clip
+	 * may be played.
+	 * @param clipId Identifier of the clip to retrieve the fragments for.
+	 * @returns Collection of server fragments that make the requested clip.
+	 */
 	public async getClipFragments(clipId: number): Promise<Q.ServerFragments>
+	/**
+	 * Time-bounded request for clip fragments.
+	 * @param clipId Identifier of the clip to retrieve the fragments for.
+	 * @param inPoint Offset defining the start boundary for clips to be queried.
+	 * @param outPoint Offset defining the end boundary for clips to be queried.
+	 * @returns Collection of fragments that are contained within or overlap the given
+	 * time boundary.
+	 */
 	public async getClipFragments(
 		clipId: number,
 		inPoint: number,
@@ -235,7 +322,14 @@ export class QuantelGateway extends EventEmitter {
 			return this.sendZone('GET', `clip/${clipId}/fragments`)
 		}
 	}
-	/** Load specified fragments onto a port */
+
+	/**
+	 * Load the given fragments onto a port.
+	 * @param portId Name of the port to load fragments onto.
+	 * @param fragments Fragments to load.
+	 * @param offset Specify an offset from that specified in the fragment to load the fragment.
+	 * @returns Status of the port load request.
+	 */
 	public async loadFragmentsOntoPort(
 		portId: string,
 		fragments: Q.ServerFragmentTypes[],
@@ -251,6 +345,7 @@ export class QuantelGateway extends EventEmitter {
 		)
 		return response
 	}
+
 	/** Query the port for which fragments are loaded. */
 	public async getFragmentsOnPort(
 		portId: string,
@@ -263,14 +358,26 @@ export class QuantelGateway extends EventEmitter {
 		})
 		// /:zoneID/server/:serverID/port/:portID/fragments(?start=:start&finish=:finish)
 	}
-	/** Start playing on a port */
+
+	/**
+	 * Start playing on a port at its current offset.
+	 * @param portId Name of the port to press play on.
+	 * @throws If the play operation was successful.
+	 */
 	public async portPlay(portId: string): Promise<Q.TriggerResult> {
 		const response = await this.sendServer<Q.TriggerResult>('POST', `port/${portId}/trigger/START`)
 		if (!response.success)
 			throw Error(`Quantel trigger start: Server returned success=${response.success}`)
 		return response
 	}
-	/** Stop (pause) playback on a port. If stopAtFrame is provided, the playback will stop at the frame specified. */
+
+	/**
+	 * Stop (pause) playback on a port. If `stopAtFrame` is provided, the playback
+	 * will stop at the frame specified. Otherwise playback will be paused now.
+	 * @param portId Name of the port to pause.
+	 * @param stopAtFrame Optional frame-in-the-future at which to stop.
+	 * @throws If the pause operation was not successful.
+	 */
 	public async portStop(portId: string, stopAtFrame?: number): Promise<Q.TriggerResult> {
 		const response = await this.sendServer<Q.TriggerResult>('POST', `port/${portId}/trigger/STOP`, {
 			offset: stopAtFrame
@@ -279,7 +386,13 @@ export class QuantelGateway extends EventEmitter {
 			throw Error(`Quantel trigger stop: Server returned success=${response.success}`)
 		return response
 	}
-	/** Jump directly to a frame, note that this might cause flicker on the output, as the frames haven't been preloaded  */
+
+	/** Jump directly to a frame. This might cause flicker on the output, as the frames
+	 * haven't been preloaded.
+	 * @param portId Name of port to jump on.
+	 * @param jumpToFrame Offset of the jump-to point.
+	 * @throws If the jump was not successful.
+	 */
 	public async portHardJump(portId: string, jumpToFrame?: number): Promise<Q.JumpResult> {
 		const response = await this.sendServer<Q.JumpResult>('POST', `port/${portId}/trigger/JUMP`, {
 			offset: jumpToFrame
@@ -288,7 +401,14 @@ export class QuantelGateway extends EventEmitter {
 			throw Error(`Quantel hard jump: Server returned success=${response.success}`)
 		return response
 	}
-	/** Prepare a jump to a frame (so that those frames are preloaded into memory) */
+
+	/**
+	 * Prepare a jump to a frame. This ensures that those frames are preloaded and ready
+	 * to play.
+	 * @param portId Name of the port to prepare a jump on.
+	 * @param jumpToFrame Offset to set a jump point to.
+	 * @throws If setting the jump was not successful.
+	 */
 	public async portPrepareJump(portId: string, jumpToFrame?: number): Promise<Q.JumpResult> {
 		const response = await this.sendServer<Q.JumpResult>('PUT', `port/${portId}/jump`, {
 			offset: jumpToFrame
@@ -297,16 +417,30 @@ export class QuantelGateway extends EventEmitter {
 			throw Error(`Quantel prepare jump: Server returned success=${response.success}`)
 		return response
 	}
-	/** After having preloading a jump, trigger the jump */
+
+	/**
+	 * After preparing a jump, trigger the jump.
+	 * @portId Name of the port to trigger a jump on.
+	 * @throws If the jump was not successful.
+	 */
 	public async portTriggerJump(portId: string): Promise<Q.TriggerResult> {
 		const response = await this.sendServer<Q.TriggerResult>('POST', `port/${portId}/trigger/JUMP`)
 		if (!response.success)
 			throw Error(`Quantel trigger jump: Server returned success=${response.success}`)
 		return response
 	}
+
 	/** Clear all fragments from a port.
-	 * If rangeStart and rangeEnd is provided, will clear the fragments for that time range,
-	 * if not, the fragments up until (but not including) the playhead, will be cleared
+	 * If rangeStart and rangeEnd is provided, will clear the fragments for that time range.
+	 * If not, the fragments up until (but not including) the playhead, will be cleared.
+	 *
+	 * _Dragons_: Including the current offset or end of data inside the range can lead to
+	 * unexpected behaviour.
+	 * @param portId Name of the port to clear fragments from.
+	 * @param rangeStart Start of range to clear fragments from.
+	 * @param rangeEnd End range to clear fragments to.
+	 * @returns Details of how much was wiped.
+	 * @throws If the fragments were not wiped.
 	 */
 	public async portClearFragments(
 		portId: string,
@@ -410,29 +544,7 @@ export class QuantelGateway extends EventEmitter {
 			this.sendRaw<T>(method, `${resource}`, queryParameters, bodyData)
 		)
 	}
-	// private sendRaw (
-	// 	method: Methods,
-	// 	resource: string,
-	// 	queryParameters?: QueryParameters,
-	// 	bodyData?: object
-	// ): Promise<any> {
 
-	// 	// This is a temporary implementation, to make the stuff run in order
-	// 	return new Promise((resolve, reject) => {
-	// 		this._doOnTime.queue(
-	// 			0, // run as soon as possible
-	// 			undefined,
-	// 			(method, resource, bodyData) => {
-	// 				return this.sendRaw2(method, resource, queryParameters, bodyData)
-	// 				.then(resolve)
-	// 				.catch(reject)
-	// 			},
-	// 			method,
-	// 			resource,
-	// 			bodyData
-	// 		)
-	// 	})
-	// }
 	private async sendRaw<T>(
 		method: Methods,
 		resource: string,
@@ -555,20 +667,38 @@ export type Optional<T> = {
 	[K in keyof T]?: T[K]
 }
 export type Omit<T, K extends keyof T> = Pick<T, Exclude<keyof T, K>>
+
+/**
+ * Specify a search query with a list of all properties that must be matched.
+ * Propeprties may include a wildcard `*` to match one or more characters and
+ * other [MySQL boolean full-text searches](https://dev.mysql.com/doc/refman/8.0/en/fulltext-boolean.html).
+ */
 export interface ClipSearchQuery {
 	/** Limit the maximum number of clips returned */
 	limit?: number
 	// clip properties
 
 	// ClipDataSummary:
+	/** Unique identifier for the clip in this zone. */
 	ClipID?: number
+	/** Globally-unique identifier for the clip. */
+	ClipGUID?: string
+	/** Source clip that this clip is a clone of. */
 	CloneID?: number
+	/** Date and time that the clip was considered complete. */
 	Completed?: string
+	/** Date and time that the clip was created. */
 	Created?: string
+	/** Description of the clip. */
+
 	Description?: string
+	/** Number of frames in the clip. Will be a number-as-a-string when knwon. */
 	Frames?: string
+	/** Clip owner. */
 	Owner?: string
+	/** Disk pool storage location for the clip. */
 	PoolID?: number
+	/** Title of the clip. */
 	Title?: string
 
 	// Q.ClipData:
@@ -596,7 +726,6 @@ export interface ClipSearchQuery {
 	Division?: string
 	AudioFormats?: string
 	VideoFormats?: string
-	ClipGUID?: string
 	Protection?: string
 	VDCPID?: string
 	PublishCompleted?: string

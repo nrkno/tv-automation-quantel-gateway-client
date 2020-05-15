@@ -1,3 +1,8 @@
+/**
+ * Interfaces for values sent to and from a Quantel Gateway.
+ */
+
+/** The Quantel Gateway uses ISO-date formatted strings for date and time values. */
 export type DateString = string // it's a string with an ISO-date in it
 
 /**
@@ -34,84 +39,159 @@ export interface ServerInfo {
 	chanPorts?: string[]
 }
 
+/**
+ * Reference to a port (logical control device) within a zone.
+ */
 export interface PortRef {
+	/** Name or numerical identifier for a server. */
 	serverID: number | string
+	/** Name of the port. */
 	portName: string
 }
 
+/**
+ * Details of a port (logical control device).
+ */
 export interface PortInfo extends PortRef {
 	type?: 'PortInfo'
+	/** Channel number (physical SDI connector) associated with the port. */
 	channelNo: number
+	/** Numberical identifier of the port. */
 	portID?: number
+	/** Is the port set up for audio only? */
 	audioOnly?: boolean
+	/** Is the port assigned to a channel? */
 	assigned?: boolean
 }
 
+/** Compound states that a port may be in. */
+type StatusOfPort =
+	| 'readyToPlay'
+	| 'playing'
+	| 'playing&readyToPlay'
+	| 'jumpReady'
+	| 'jumpReady&readyToPlay'
+	| 'jumpReady&playing'
+	| 'jumpReady&readyToPlay&playing'
+	| 'fading'
+	| 'unknown'
+
+/** Snapshot of the current status of a port. */
 export interface PortStatus extends PortRef {
 	type: 'PortStatus'
+	/** Numerical identifier for the port. */
 	portID: number
+	/** Wallclock or station reference time derived from server reference feed. */
 	refTime: string
+	/** Time on input port. */
 	portTime: string
+	/** Play speed of the port, e.g. 1.0 for normal playback, 0.0 for stopped. */
 	speed: number
+	/** Current offset of the play or record head on the port. */
 	offset: number
-	status: string
+	/** What state or states is the port in? */
+	status: StatusOfPort
+	/** Offset+1 of frame at which data ends. */
 	endOfData: number
+	/** Number of frames since the Port was last given a valid command or transferred a frame. */
 	framesUnused: number
+	/** Timecode being generated on output. */
 	outputTime: string
+	/** Channels controlled by the port. */
 	channels: number[]
+	/** Video format configured for the port, e.g. 1080i50. */
 	videoFormat: string
 }
 
 export interface ReleaseRef extends PortRef {
+	/** Was the port only reset as part of the release, not fully freed? */
 	resetOnly?: boolean
 }
 
+/**
+ * Details of the status reported for releasing a port.
+ */
 export interface ReleaseStatus extends ReleaseRef {
 	type: 'ReleaseStatus'
+	/** Was the port realeased successfully? */
 	released: boolean
 	resetOnly: boolean
 }
 
+/**
+ * Reference to a clip
+ */
 export interface ClipRef {
 	/** Identifier of the clip this message refers to. */
 	clipID: number
 }
 
+/**
+ * Reference used to query clip fragments, allowing for time-bounded queries.
+ */
 export interface FragmentRef extends ClipRef {
+	/** Start offset for query boundary. Zero assumed when omitted. */
 	start?: number
+	/** End offset of query boundary. Maximum offset assumed when omitted. */
 	finish?: number
 }
 
+/**
+ * Reference used to query fragments on a port, allowing for time-bounded
+ * queries.
+ */
 export interface PortFragmentRef extends PortRef {
+	/** Start offset for query boundary. Zero assumed when omitted. */
 	start?: number
+	/** End offset of query boundary. Maximum offset assumed when omitted. */
 	finish?: number
 }
 
-export interface ClipPropertyList {
-	// Use property 'limit' of type number to set the maximum number of values to return
-	[name: string]: string | number
-}
+// Quantel client has specific properties enumberated for searches.
+//   See ClipSearchQuery interface.
+// export interface ClipPropertyList {
+// 	// Use property 'limit' of type number to set the maximum number of values to return
+// 	[name: string]: string | number
+// }
 
+/**
+ * Summmary details for a clip reported as the result of a search.
+ */
 export interface ClipDataSummary {
 	type: 'ClipDataSummary' | 'ClipData'
+	/** Unique identifier for the clip in this zone. */
 	ClipID: number
+	/** Globally-unique identifier for the clip. */
 	ClipGUID: string
+	/** Source clip that this clip is a clone of. */
 	CloneId: number | null
+	/** Date and time that the clip was considered complete. */
 	Completed: DateString | null
+	/** Date and time that the clip was created. */
 	Created: DateString // ISO-formatted date
+	/** Description of the clip. */
+
 	Description: string
+	/** Number of frames in the clip. Will be a number-as-a-string when knwon. */
 	Frames: string // TODO ISA type is None ... not sure whether to convert to number
+	/** Clip owner. */
 	Owner: string
+	/** Disk pool storage location for the clip. */
 	PoolID: number | null
+	/** Title of the clip. */
 	Title: string
 }
 
 export interface ClipData extends ClipDataSummary {
 	type: 'ClipData'
+	/** Clip category. Sometimes used to identify a managing agent MAM. */
 	Category: string
+	/** Where the clip was copied from another zone, identifier of the source zone. */
 	CloneZone: number | null
 	Destination: number | null
+	/** Date and time after which it is safe to remove the clip. */
 	Expiry: DateString | null // ISO-formatted date
+	/** Does the clip have associated edit data? */
 	HasEditData: number | null
 	Inpoint: number | null
 	JobID: number | null
@@ -257,9 +337,14 @@ export interface PortLoadInfo extends PortRef {
 	offset?: number
 }
 
+/**
+ * Status after loading fragments onto a port.
+ */
 export interface PortLoadStatus extends PortRef {
 	type: 'PortLoadStatus'
+	/** Number of fragments loaded onto the port. */
 	fragmentCount: number
+	/** Offset at which fragments were loaded. */
 	offset: number
 }
 
