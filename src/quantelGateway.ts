@@ -14,7 +14,7 @@ const literal = <T>(t: T): T => t
  *
  *     const quantelClient = new QuantelGateway()
  *     await quantelCient.init(
- *         'quantel.gateway.url:port', 'quantel.isa.url', 'default', serverID)
+ *         'quantel.gateway.url:port', 'quantel.isa.url', undefined, 'default', serverID)
  *
  * If the serverID is not known, before calling `init()` request the details of all servers:
  *
