@@ -18,6 +18,7 @@
 		"test": "jest test --passWithNoTests --",
 		"test:coverage": "yarn test -- --coverage",
 		"validate:dependencies": "yarn audit && yarn license-validate",
+		"validate:dev-dependencies": "yarn audit --groups devDependencies",
 		"license-validate": "node-license-validator -p -d --allow-licenses MIT BSD BSD-3-Clause BSD-2-Clause ISC Apache Apache-2.0 WTFPL Unlicense --allow-packages cycle"
 	},
 	"author": "Johann Nymann <johan@superfly.tv>",
