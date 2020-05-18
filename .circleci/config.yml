@@ -100,7 +100,7 @@ jobs:
           at: ~/project
       - add_ssh_keys:
           fingerprints:
-            - 'ca:54:a9:03:b6:45:45:80:ca:b9:ee:1e:cb:22:1b:a3'
+            - '14:73:b0:7b:ba:59:52:33:7a:53:8b:1a:a3:bb:17:b6'
       - run: mkdir -p ~/.ssh
       - run:
           name: Keyscan Github
@@ -159,7 +159,7 @@ jobs:
             fi
       - add_ssh_keys:
           fingerprints:
-            - 'ca:54:a9:03:b6:45:45:80:ca:b9:ee:1e:cb:22:1b:a3'
+            - '14:73:b0:7b:ba:59:52:33:7a:53:8b:1a:a3:bb:17:b6'
       - run: mkdir -p ~/.ssh
       - run:
           name: Keyscan Github
