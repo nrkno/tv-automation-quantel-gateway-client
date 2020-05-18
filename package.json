@@ -21,6 +21,9 @@
 		"cov": "jest --coverage; open-cli coverage/lcov-report/index.html",
 		"cov-open": "open-cli coverage/lcov-report/index.html",
 		"send-coverage": "codecov",
+		"changelog": "standard-version",
+		"release": "yarn reset && yarn test && yarn changelog",
+		"reset": "git clean -dfx && git reset --hard && yarn",
 		"validate:dependencies": "yarn audit && yarn license-validate",
 		"validate:dev-dependencies": "yarn audit --groups devDependencies",
 		"license-validate": "node-license-validator -p -d --allow-licenses MIT BSD BSD-3-Clause BSD-2-Clause ISC Apache Apache-2.0 WTFPL Unlicense --allow-packages cycle"
@@ -56,6 +59,7 @@
 		"open-cli": "^6.0.1",
 		"prettier": "^2.0.4",
 		"sinon": "^7.4.1",
+		"standard-version": "^8.0.0",
 		"trash-cli": "^3.0.0",
 		"ts-jest": "^25.3.1",
 		"typescript": "^3.8.3"
