@@ -1,13 +1,10 @@
 {
-	"name": "@nrk/tv-automation-quantel-gateway-client",
+	"name": "tv-automation-quantel-gateway-client",
 	"version": "1.0.2",
 	"description": "Quantel gateway client library",
 	"engines": {
 		"node": ">=10.20.1"
 	},
-	"files": [
-		"lib/**/*"
-	],
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
 	"scripts": {
@@ -28,7 +25,7 @@
 		"validate:dev-dependencies": "yarn audit --groups devDependencies",
 		"license-validate": "node-license-validator -p -d --allow-licenses MIT BSD BSD-3-Clause BSD-2-Clause ISC Apache Apache-2.0 WTFPL Unlicense --allow-packages cycle"
 	},
-	"author": "Johann Nymann <johan@superfly.tv>",
+	"author": "Johan Nyman <johan@superfly.tv>",
 	"contributors": [
 		"Richard Cartwright <spark@superfly.tv> (https://superfly.tv/)"
 	],
