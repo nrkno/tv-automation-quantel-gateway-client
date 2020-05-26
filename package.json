@@ -65,7 +65,7 @@
 		"standard-version": "^8.0.0",
 		"trash-cli": "^3.0.0",
 		"ts-jest": "^25.3.1",
-		"typescript": "^3.9.3"
+		"typescript": "~3.8.0"
 	},
 	"bugs": {
 		"url": "https://github.com/nrkno/tv-automation-quantel-gateway-client/issues"
