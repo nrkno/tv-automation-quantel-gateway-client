@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.0.7](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.6...v1.0.7) (2020-05-26)
+
+
+### Bug Fixes
+
+* [release] revert to Typescript 3.8.x - 3.9.x is not fit for purpose yet ([d8c2ad6](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/d8c2ad62f097f2de258e6e719791e93c97bf270f))
+
 ### [1.0.6](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.5...v1.0.6) (2020-05-26)
 
 ### [1.0.5](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.4...v1.0.5) (2020-05-26)
