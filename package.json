@@ -7,6 +7,12 @@
 	},
 	"main": "dist/index.js",
 	"types": "dist/index.d.ts",
+	"files": [
+		"/dist",
+		"/CHANGELOG.md",
+		"/README.md",
+		"/LICENSE"
+	],
 	"scripts": {
 		"build": "trash dist && yarn build:main",
 		"build:main": "tsc -p tsconfig.json",
