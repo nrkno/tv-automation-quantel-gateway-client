@@ -475,7 +475,7 @@ export interface CloneInfo {
  */
 export interface CloneResult extends CloneInfo {
 	type: 'CloneResult'
-	/** Identifier of the target of the copy, which may be a pre-existing clip ID. */
+	/** Clip identifier of the target of the copy, which may be a pre-existing clip ID. */
 	copyID: number
 	/** Whether it was necessary to start a copy operation, otherwise a copy already existed. */
 	copyCreated: boolean
