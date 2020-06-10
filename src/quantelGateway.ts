@@ -37,6 +37,8 @@ export class QuantelGateway extends EventEmitter {
 
 	private _statusMessage: string | null = 'Initializing...' // null = all good
 	private _cachedServer?: Q.ServerInfo | undefined
+	private _monitorPorts: MonitorPorts = {}
+	private _connected = false
 
 	/** Create a Quantel Gateway client. */
 	constructor() {
@@ -123,18 +125,53 @@ export class QuantelGateway extends EventEmitter {
 	 */
 	public monitorServerStatus(
 		callbackOnStatusChange: (connected: boolean, errorMessage: string | null) => void
-	): void {
+	) {
 		const getServerStatus = async (): Promise<string | null> => {
 			try {
+				this._connected = false
 				if (!this._gatewayUrl) return `Gateway URL not set`
 
 				if (!this._serverId) return `Server id not set`
 
-				const servers = await this.getServers(this._zoneId || 'default')
+				const servers = await this.getServers(this._zoneId)
 				const server = _.find(servers, (s) => s.ident === this._serverId)
 
 				if (!server) return `Server ${this._serverId} not present on ISA`
 				if (server.down) return `Server ${this._serverId} is down`
+
+				this._connected = true
+
+				const serverErrors: string[] = []
+
+				_.each(this._monitorPorts, (monitorPort, monitorPortId: string) => {
+					const portExists = _.find(
+						server.portNames || [],
+						(portName) => portName === monitorPortId
+					)
+
+					if (
+						!portExists && // our port is NOT set up on server
+						_.compact(server.portNames).length === (server.numChannels || 0) // There is no more room on server
+					) {
+						serverErrors.push(
+							`Not able to assign port "${monitorPortId}", due to all ports being already used`
+						)
+					} else {
+						_.each(monitorPort.channels, (monitorChannel) => {
+							const channelPort = (server.chanPorts || [])[monitorChannel]
+
+							if (
+								channelPort && // The channel is assigned to a port
+								channelPort !== monitorPortId // The channel is NOT assigned to our port!
+							) {
+								serverErrors.push(
+									`Not able to assign channel to port "${monitorPortId}", the channel ${monitorChannel} is already assigned to another port "${channelPort}"!`
+								)
+							}
+						})
+					}
+				})
+				if (serverErrors.length) return serverErrors.join(', ')
 
 				if (!this._initialized) return `Not initialized`
 
@@ -143,7 +180,7 @@ export class QuantelGateway extends EventEmitter {
 				return `Error when monitoring status: ${(e && e.message) || e.toString()}`
 			}
 		}
-		const checkServerStatus = (): void => {
+		const checkServerStatus = () => {
 			getServerStatus()
 				.then((statusMessage) => {
 					if (statusMessage !== this._statusMessage) {
@@ -158,9 +195,10 @@ export class QuantelGateway extends EventEmitter {
 		}, this.checkStatusInterval)
 		checkServerStatus() // also run one right away
 	}
+
 	/** Is the client connected somehow? */
 	public get connected(): boolean {
-		return this._statusMessage === null
+		return this._connected
 	}
 	/**
 	 * Description of the status of the connection.
@@ -430,7 +468,8 @@ export class QuantelGateway extends EventEmitter {
 		return response
 	}
 
-	/** Clear all fragments from a port.
+	/**
+	 * Clear all fragments from a port.
 	 * If rangeStart and rangeEnd is provided, will clear the fragments for that time range.
 	 * If not, the fragments up until (but not including) the playhead, will be cleared.
 	 *
@@ -456,6 +495,23 @@ export class QuantelGateway extends EventEmitter {
 	}
 
 	/**
+	 * Set the ports that are monitored for changes.
+	 * @param monitorPorts Dictionary of ports monitored for status change.
+	 */
+	public setMonitoredPorts(monitorPorts: MonitorPorts) {
+		this._monitorPorts = monitorPorts
+	}
+
+	/**
+	 * Request that the Quantel gateway kills itself.
+	 * If running in Docker configured to auto-restart, calling this method will
+	 * cause the gateway to automatically restart.
+	 */
+	public async kill() {
+		return this.sendBase('POST', 'kill/me/if/you/are/sure')
+	}
+
+	/**
 	 * Request a clone of a clip, either between zones or between servers in the same zone.
 	 * The target zone ID is that of the servers the request is sent to.
 	 * @param zoneID Source zone ID, for inter-zone copies only. Otherwise `undefined`.
@@ -463,7 +519,7 @@ export class QuantelGateway extends EventEmitter {
 	 * @param poolID Target pool identifier.
 	 * @param priority Priority level, a value between 0 (low) and 15 (high).  Default is 8 (standard).
 	 * @param history For inter-zone cloning, should provenance be carried along with copy? Default is `true`.
-	 * @returns Details of the copy, including a `copyID` identifier for the target copy.
+	 * @returns Details of the copy, including a `copyID` clip identifier for the target copy.
 	 */
 	public async copyClip(
 		zoneID: number | undefined,
@@ -731,4 +787,15 @@ export interface ClipSearchQuery {
 	PublishCompleted?: string
 
 	[index: string]: string | number | undefined
+}
+
+/**
+ * Dictionatu of ports monitored for status changes.
+ */
+export interface MonitorPorts {
+	/** Name of the ports being monitored. */
+	[portId: string]: {
+		/** Phyiscal channels (SDI ports) controlled by the port. */
+		channels: number[]
+	}
 }
