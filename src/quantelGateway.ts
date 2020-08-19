@@ -704,7 +704,7 @@ export class QuantelGateway extends EventEmitter {
 	}
 
 	private _isNotFoundAThing(e: Error): boolean {
-		if (e.message.startsWith('404')) {
+		if (e.message.match(/404/)) {
 			return (e.message || '').match('Not found. Request') === null
 		}
 		return false
