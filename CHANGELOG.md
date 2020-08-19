@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [1.0.9](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.8...v1.0.9) (2020-08-19)
+
+
+### Bug Fixes
+
+* apparently, 404 messages doesn't start with 404 anymore ([cc67054](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/cc67054c9890d31d9540667a2cab738b464b016b))
+
 ### [1.0.8](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.7...v1.0.8) (2020-06-10)
 
 
