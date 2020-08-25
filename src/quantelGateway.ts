@@ -133,7 +133,7 @@ export class QuantelGateway extends EventEmitter {
 
 				if (!this._serverId) return `Server id not set`
 
-				const servers = await this.getServers(this._zoneId)
+				const servers = await this.getServers(this._zoneId || 'default')
 				const server = _.find(servers, (s) => s.ident === this._serverId)
 
 				if (!server) return `Server ${this._serverId} not present on ISA`
@@ -635,7 +635,8 @@ export class QuantelGateway extends EventEmitter {
 				method,
 				json: bodyData,
 				timeout: CALL_TIMEOUT,
-				responseType: 'json'
+				responseType: 'json',
+				resolveBodyOnly: false
 			})
 			if (response.statusCode === 200) {
 				return response.body
