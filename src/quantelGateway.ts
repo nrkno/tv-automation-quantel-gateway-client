@@ -644,7 +644,11 @@ export class QuantelGateway extends EventEmitter {
 				return Promise.reject(`non-200 status code response`)
 			}
 		} catch (e) {
-			return Promise.reject(e)
+			if (e.response && e.response.body) {
+				return e.response.body
+			} else {
+				throw e
+			}
 		}
 	}
 
