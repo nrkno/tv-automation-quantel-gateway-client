@@ -607,18 +607,18 @@ export class QuantelGateway extends EventEmitter {
 		queryParameters?: QueryParameters,
 		bodyData?: object
 	): Promise<T | QuantelErrorResponse> {
-		const response = await this.sendRawInner<T>(method, resource, queryParameters, bodyData)
+		const responseBody = await this.sendRawInner<T>(method, resource, queryParameters, bodyData)
 
 		if (
-			this._isAnErrorResponse(response) &&
-			response.status === 502 && //
-			(response.message + '').match(/first provide a quantel isa/i) // First provide a Quantel ISA connection URL (e.g. POST to /connect)
+			this._isAnErrorResponse(responseBody) &&
+			responseBody.status === 502 && //
+			(responseBody.message + '').match(/first provide a quantel isa/i) // First provide a Quantel ISA connection URL (e.g. POST to /connect)
 		) {
 			await this.connectToISA()
 			// Then try again:
 			return this.sendRawInner(method, resource, queryParameters, bodyData)
 		} else {
-			return response
+			return responseBody
 		}
 	}
 
