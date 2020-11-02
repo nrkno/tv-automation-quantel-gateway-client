@@ -352,12 +352,12 @@ export enum Trigger {
 	START = 'START', // quantel.START
 	STOP = 'STOP', // quantel.STOP
 	JUMP = 'JUMP', // quantel.JUMP
-	TRANSITION = 'TRANSITION' // quantel.TRANSITION
+	TRANSITION = 'TRANSITION', // quantel.TRANSITION
 }
 
 export enum Priority {
 	STANDARD = 'STANDARD', // quantel.STANDARD
-	HIGH = 'HIGH' // quantel.HIGH
+	HIGH = 'HIGH', // quantel.HIGH
 }
 
 export interface TriggerInfo extends PortRef {
