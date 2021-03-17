@@ -31,8 +31,7 @@ import { QuantelGateway, Q } from 'quantel-gateway-client'
 const quantelClient = new QuantelGateway()
 await quantelCient.init(
 	'quantel.gateway.url:port',
-	'quantel.isa.url',
-	undefined,
+	'quantel.isa.url', // or ['quantel.masterISA.url', 'quantel.slaveISA.url, ...]
 	'default',
 	serverID
 )
