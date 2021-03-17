@@ -129,7 +129,7 @@ export class QuantelGateway extends EventEmitter {
 	 */
 	public monitorServerStatus(
 		callbackOnStatusChange: (connected: boolean, errorMessage: string | null) => void
-	) {
+	): void {
 		const getServerStatus = async (): Promise<string | null> => {
 			try {
 				this._connected = false
@@ -184,7 +184,7 @@ export class QuantelGateway extends EventEmitter {
 				return `Error when monitoring status: ${(e && e.message) || e.toString()}`
 			}
 		}
-		const checkServerStatus = () => {
+		const checkServerStatus = (): void => {
 			getServerStatus()
 				.then((statusMessage) => {
 					if (statusMessage !== this._statusMessage) {
@@ -508,7 +508,7 @@ export class QuantelGateway extends EventEmitter {
 	 * Set the ports that are monitored for changes.
 	 * @param monitorPorts Dictionary of ports monitored for status change.
 	 */
-	public setMonitoredPorts(monitorPorts: MonitorPorts) {
+	public setMonitoredPorts(monitorPorts: MonitorPorts): void {
 		this._monitorPorts = monitorPorts
 	}
 
@@ -517,7 +517,7 @@ export class QuantelGateway extends EventEmitter {
 	 * If running in Docker configured to auto-restart, calling this method will
 	 * cause the gateway to automatically restart.
 	 */
-	public async kill() {
+	public async kill(): void {
 		return this.sendBase('POST', 'kill/me/if/you/are/sure')
 	}
 
