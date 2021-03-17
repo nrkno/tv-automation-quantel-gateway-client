@@ -30,7 +30,8 @@ export class QuantelGateway extends EventEmitter {
 
 	private _gatewayUrl: string | undefined
 	private _initialized = false
-	private _ISAUrl: string | undefined
+	private _ISAUrlMaster: string | undefined
+	private _ISAUrlBackup: string | undefined
 	private _zoneId: string | undefined
 	private _serverId: number | undefined
 	private _monitorInterval: NodeJS.Timer | undefined
@@ -93,18 +94,21 @@ export class QuantelGateway extends EventEmitter {
 	 * @returns Details of the connection created.
 	 */
 	public async connectToISA(
+		ISAUrlMaster: string,
+		ISAUrlBackup?: string
+	): Promise<Q.ConnectionDetails>
+	public async connectToISA(): Promise<Q.ConnectionDetails>
+	public async connectToISA(
 		ISAUrlMaster?: string,
 		ISAUrlBackup?: string
 	): Promise<Q.ConnectionDetails> {
-		if (ISAUrlMaster) {
-			this._ISAUrl = ISAUrlMaster.replace(/^https?:\/\//, '') // trim any https://
-			if (ISAUrlBackup) {
-				this._ISAUrl = this._ISAUrl + ',' + ISAUrlBackup.replace(/^https?:\/\//, '')
-			}
-		}
-		if (!this._ISAUrl) throw new Error('Quantel connectToIsa: ISAUrl not set!')
+		if (ISAUrlMaster) this._ISAUrlMaster = ISAUrlMaster
+		if (ISAUrlBackup) this._ISAUrlBackup = ISAUrlBackup
+
+		const ISAUrl = this._ISAUrl
+
 		return this._ensureGoodResponse<Q.ConnectionDetails>(
-			this.sendRaw('POST', `connect/${encodeURIComponent(this._ISAUrl)}`)
+			this.sendRaw('POST', `connect/${encodeURIComponent(ISAUrl)}`)
 		)
 	}
 
@@ -218,6 +222,12 @@ export class QuantelGateway extends EventEmitter {
 	/** Location of the ISA Manager or ISA managers the gateway can connect to. */
 	public get ISAUrl(): string {
 		return this._ISAUrl || ''
+	}
+	public get ISAUrlMaster(): string | undefined {
+		return this._ISAUrlMaster
+	}
+	public get ISAUrlBackup(): string | undefined {
+		return this._ISAUrlBackup
 	}
 	/** Get the zone identifier set for this client. */
 	public get zoneId(): string {
@@ -713,6 +723,17 @@ export class QuantelGateway extends EventEmitter {
 			return (e.message || '').match('Not found. Request') === null
 		}
 		return false
+	}
+	private get _ISAUrl(): string {
+		let url = ''
+		if (this._ISAUrlMaster) {
+			url = this._ISAUrlMaster.replace(/^https?:\/\//, '') // trim any https://
+			if (this._ISAUrlBackup) {
+				url = url + ',' + this._ISAUrlBackup.replace(/^https?:\/\//, '')
+			}
+		}
+		if (!url) throw new Error('Quantel ISAUrl not set!')
+		return url
 	}
 }
 
