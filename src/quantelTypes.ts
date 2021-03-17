@@ -399,7 +399,7 @@ export interface ConnectionDetails {
 	isaIOR: string
 	/** Location of the attached ISA manager. */
 	href: string
-	/** List of alternative ISA managers, e.g. master and backup. */
+	/** List of alternative ISA managers, e.g. master and slave(s). */
 	refs: string[]
 	/** Incrementing round robim counter used to select the next ISA manager on failure. */
 	robin: number

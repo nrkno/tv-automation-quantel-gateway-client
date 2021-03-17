@@ -30,7 +30,7 @@ export class QuantelGateway extends EventEmitter {
 
 	private _gatewayUrl: string | undefined
 	private _initialized = false
-	private _ISAUrl: string | undefined
+	private _ISAUrls: string[] = []
 	private _zoneId: string | undefined
 	private _serverId: number | undefined
 	private _monitorInterval: NodeJS.Timer | undefined
@@ -48,19 +48,17 @@ export class QuantelGateway extends EventEmitter {
 	/**
 	 * Initialize a Quantel Gateway client, making the required connections.
 	 *
-	 * Note that the master and backup (if specified) will be tried alternately
 	 * in the event that connection to one of them fails.
 	 * @param gatewayUrl Location of the associated Quantel Gateway.
-	 * @param ISAUrlMaster Location of the ISA manager to be connected to first of all.
-	 * @param ISAUrlBackup Optional backup ISA manager for the gateway to switch to
-	 * in the event of failure of the master.
+	 * @param ISAUrls Locations of the ISA managers (in order of importance).
+	 * Multiple entries means that there are a master and one or several slave ISA's.
+	 * In the event of failure of the master, the slaves will be tried in order by the Quantel gateway.
 	 * @param zoneId Zone identifier, or `undefined` for default.
 	 * @param serverId Identifier of the server to be controlled.
 	 */
 	public async init(
 		gatewayUrl: string,
-		ISAUrlMaster: string,
-		ISAUrlBackup: string | undefined,
+		ISAUrls: string | string[],
 		zoneId: string | undefined,
 		serverId: number
 	): Promise<void> {
@@ -69,8 +67,8 @@ export class QuantelGateway extends EventEmitter {
 		this._gatewayUrl = gatewayUrl.replace(/\/$/, '') // trim trailing slash
 		if (!this._gatewayUrl.match(/http/)) this._gatewayUrl = 'http://' + this._gatewayUrl
 
-		// Connect to ISA:
-		await this.connectToISA(ISAUrlMaster, ISAUrlBackup)
+		// Connect to ISA(s):
+		await this.connectToISA(ISAUrls)
 		this._zoneId = zoneId || 'default'
 		this._serverId = serverId
 
@@ -87,24 +85,19 @@ export class QuantelGateway extends EventEmitter {
 
 	/**
 	 * Request that the Quantel Gateway connects to the given ISA manager.
-	 * @param ISAUrlMaster Location of the ISA manager to be connected to first of all.
-	 * @param ISAUrlBackup Optional backup ISA manager for the gateway to switch to
-	 * in the event of failure of the master.
+	 * @param ISAUrls Locations of the ISA managers (in order of importance). Multiple entries means that there are a master and one or several slave ISA's.
 	 * @returns Details of the connection created.
 	 */
-	public async connectToISA(
-		ISAUrlMaster?: string,
-		ISAUrlBackup?: string
-	): Promise<Q.ConnectionDetails> {
-		if (ISAUrlMaster) {
-			this._ISAUrl = ISAUrlMaster.replace(/^https?:\/\//, '') // trim any https://
-			if (ISAUrlBackup) {
-				this._ISAUrl = this._ISAUrl + ',' + ISAUrlBackup.replace(/^https?:\/\//, '')
-			}
-		}
-		if (!this._ISAUrl) throw new Error('Quantel connectToIsa: ISAUrl not set!')
-		return this._ensureGoodResponse<Q.ConnectionDetails>(
-			this.sendRaw('POST', `connect/${encodeURIComponent(this._ISAUrl)}`)
+	public async connectToISA(ISAUrls: string | string[]): Promise<Q.ConnectionDetails> {
+		this._ISAUrls = Array.isArray(ISAUrls) ? ISAUrls : ISAUrls ? [ISAUrls] : []
+
+		return await this.reconnectToISA()
+	}
+	public async reconnectToISA(): Promise<void> {
+		const ISAUrl = this._formattedISAUrl
+
+		await this._ensureGoodResponse<Q.ConnectionDetails>(
+			this.sendRaw('POST', `connect/${encodeURIComponent(ISAUrl)}`)
 		)
 	}
 
@@ -125,7 +118,7 @@ export class QuantelGateway extends EventEmitter {
 	 */
 	public monitorServerStatus(
 		callbackOnStatusChange: (connected: boolean, errorMessage: string | null) => void
-	) {
+	): void {
 		const getServerStatus = async (): Promise<string | null> => {
 			try {
 				this._connected = false
@@ -180,7 +173,7 @@ export class QuantelGateway extends EventEmitter {
 				return `Error when monitoring status: ${(e && e.message) || e.toString()}`
 			}
 		}
-		const checkServerStatus = () => {
+		const checkServerStatus = (): void => {
 			getServerStatus()
 				.then((statusMessage) => {
 					if (statusMessage !== this._statusMessage) {
@@ -215,9 +208,12 @@ export class QuantelGateway extends EventEmitter {
 	public get gatewayUrl(): string {
 		return this._gatewayUrl || ''
 	}
-	/** Location of the ISA Manager or ISA managers the gateway can connect to. */
+	/** The Location(s) of the ISA Manager(s) the gateway can connect to. (comma-separated string) */
 	public get ISAUrl(): string {
-		return this._ISAUrl || ''
+		return this._formattedISAUrl
+	}
+	public get ISAUrls(): string[] {
+		return this._ISAUrls
 	}
 	/** Get the zone identifier set for this client. */
 	public get zoneId(): string {
@@ -498,7 +494,7 @@ export class QuantelGateway extends EventEmitter {
 	 * Set the ports that are monitored for changes.
 	 * @param monitorPorts Dictionary of ports monitored for status change.
 	 */
-	public setMonitoredPorts(monitorPorts: MonitorPorts) {
+	public setMonitoredPorts(monitorPorts: MonitorPorts): void {
 		this._monitorPorts = monitorPorts
 	}
 
@@ -507,8 +503,8 @@ export class QuantelGateway extends EventEmitter {
 	 * If running in Docker configured to auto-restart, calling this method will
 	 * cause the gateway to automatically restart.
 	 */
-	public async kill() {
-		return this.sendBase('POST', 'kill/me/if/you/are/sure')
+	public async kill(): Promise<void> {
+		await this.sendBase('POST', 'kill/me/if/you/are/sure')
 	}
 
 	/**
@@ -614,7 +610,7 @@ export class QuantelGateway extends EventEmitter {
 			responseBody.status === 502 && //
 			(responseBody.message + '').match(/first provide a quantel isa/i) // First provide a Quantel ISA connection URL (e.g. POST to /connect)
 		) {
-			await this.connectToISA()
+			await this.reconnectToISA()
 			// Then try again:
 			return this.sendRawInner(method, resource, queryParameters, bodyData)
 		} else {
@@ -713,6 +709,17 @@ export class QuantelGateway extends EventEmitter {
 			return (e.message || '').match('Not found. Request') === null
 		}
 		return false
+	}
+	private get _formattedISAUrl(): string {
+		if (this._ISAUrls.length) {
+			const urls: string[] = []
+			for (const url of this._ISAUrls) {
+				urls.push(url.replace(/^https?:\/\//, '')) // trim any https://
+			}
+			return urls.join(',')
+		} else {
+			throw new Error('Quantel ISAUrls not set!')
+		}
 	}
 }
 
