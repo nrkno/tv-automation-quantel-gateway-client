@@ -93,10 +93,10 @@ export class QuantelGateway extends EventEmitter {
 
 		return await this.reconnectToISA()
 	}
-	public async reconnectToISA(): Promise<void> {
+	public async reconnectToISA(): Promise<Q.ConnectionDetails> {
 		const ISAUrl = this._formattedISAUrl
 
-		await this._ensureGoodResponse<Q.ConnectionDetails>(
+		return await this._ensureGoodResponse<Q.ConnectionDetails>(
 			this.sendRaw('POST', `connect/${encodeURIComponent(ISAUrl)}`)
 		)
 	}
