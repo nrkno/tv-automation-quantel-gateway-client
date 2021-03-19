@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+## [2.0.0](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.12...v2.0.0) (2021-03-19)
+
+
+### ⚠ BREAKING CHANGES
+
+* change how ISA url:s are handled. All ISA urls (both master & slaves) are now handled in a single array
+
+### Features
+
+* change how ISA url:s are handled. All ISA urls (both master & slaves) are now handled in a single array ([fce28cc](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/fce28cc4bdf4d668372037dd400b5284ef2eef33))
+
+
+### Bug Fixes
+
+* store ISAUrlMaster and ISAUrlBackup in their unaltered form, and expose them via getters. ([6ebb058](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/6ebb05861debd526a039c5d0833b5df1f1db4fee))
+
 ### [1.0.12](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.11...v1.0.12) (2020-08-26)
 
 
