@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.0.1](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v2.0.0...v2.0.1) (2021-03-19)
+
+
+### Bug Fixes
+
+* type error [release] ([855e834](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/855e83442e8a2c138d8e7a6b06b32d6e9e6d2fae))
+
 ## [2.0.0](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v1.0.12...v2.0.0) (2021-03-19)
 
 
