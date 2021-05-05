@@ -77,8 +77,12 @@ export class QuantelGateway extends EventEmitter {
 		// const zone = _.find(zones, zone => zone.zoneName === this._zoneId)
 		// if (!zone) throw new Error(`Zone ${this._zoneId} not found!`)
 
-		const server = await this.getServer()
-		if (!server) throw new Error(`Server ${this._serverId} not found!`)
+		// If the server is not set, skip this check.
+		// (In some cases, the consumer might not want to provide a serverId (like when only we only want to search, never copy))
+		if (this._serverId !== 0) {
+			const server = await this.getServer()
+			if (!server) throw new Error(`Server ${this._serverId} not found!`)
+		}
 
 		this._initialized = true
 	}
