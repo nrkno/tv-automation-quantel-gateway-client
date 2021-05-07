@@ -36,7 +36,7 @@ export class QuantelGateway extends EventEmitter {
 	private _monitorInterval: NodeJS.Timer | undefined
 
 	private _statusMessage: string | null = 'Initializing...' // null = all good
-	private _cachedServer?: Q.ServerInfo | undefined
+	private _cachedServer: Q.ServerInfo | undefined
 	private _monitorPorts: MonitorPorts = {}
 	private _connected = false
 
@@ -60,7 +60,7 @@ export class QuantelGateway extends EventEmitter {
 		gatewayUrl: string,
 		ISAUrls: string | string[],
 		zoneId: string | undefined,
-		serverId: number
+		serverId: number | undefined
 	): Promise<void> {
 		this._initialized = false // in case we are called again
 		this._cachedServer = undefined // reset in the event of a second calling
@@ -70,19 +70,13 @@ export class QuantelGateway extends EventEmitter {
 		// Connect to ISA(s):
 		await this.connectToISA(ISAUrls)
 		this._zoneId = zoneId || 'default'
-		this._serverId = serverId
 
 		// TODO: this is not implemented yet in Quantel gw:
 		// const zones = await this.getZones()
 		// const zone = _.find(zones, zone => zone.zoneName === this._zoneId)
 		// if (!zone) throw new Error(`Zone ${this._zoneId} not found!`)
 
-		// If the server is not set, skip this check.
-		// (In some cases, the consumer might not want to provide a serverId (like when only we only want to search, never copy))
-		if (this._serverId !== 0) {
-			const server = await this.getServer()
-			if (!server) throw new Error(`Server ${this._serverId} not found!`)
-		}
+		await this.setServerId(serverId)
 
 		this._initialized = true
 	}
@@ -128,13 +122,11 @@ export class QuantelGateway extends EventEmitter {
 				this._connected = false
 				if (!this._gatewayUrl) return `Gateway URL not set`
 
-				if (!this._serverId) return `Server id not set`
+				if (!this._serverId) return `QuantelGatewayClient.serverId not set`
+				const server = await this.getServer(true)
 
-				const servers = await this.getServers(this._zoneId || 'default')
-				const server = _.find(servers, (s) => s.ident === this._serverId)
-
-				if (!server) return `Server ${this._serverId} not present on ISA`
-				if (server.down) return `Server ${this._serverId} is down`
+				if (!server) return `Server ${this._serverId} not found on ISA`
+				if (server.down) return `Server ${server.ident} is down`
 
 				this._connected = true
 
@@ -223,9 +215,20 @@ export class QuantelGateway extends EventEmitter {
 	public get zoneId(): string {
 		return this._zoneId || 'default'
 	}
+	/** Get the server to be controlled by this client. */
+	public get serverId(): number | undefined {
+		return this._serverId
+	}
 	/** Set the server to be controlled by this client. */
-	public get serverId(): number {
-		return this._serverId || 0
+	public async setServerId(serverId: number | undefined): Promise<void> {
+		this._serverId = serverId
+
+		// If the server is not set, skip this check.
+		// (In some cases, the consumer might not want to provide a serverId (like when only we only want to search, never copy))
+		if (this._serverId) {
+			const server = await this.getServer(true)
+			if (!server) throw new Error(`Server ${this._serverId} not found on ISA!`)
+		}
 	}
 
 	/**
@@ -249,13 +252,20 @@ export class QuantelGateway extends EventEmitter {
 	}
 
 	/** Return the (possibly cached) server */
-	public async getServer(): Promise<Q.ServerInfo | null> {
+	public async getServer(disableCache = false): Promise<Q.ServerInfo | null> {
+		// Invalidate the cache?
+		if (disableCache || this._cachedServer?.ident !== this._serverId) {
+			this._cachedServer = undefined
+		}
+
 		if (this._cachedServer !== undefined) return this._cachedServer
+
+		if (!this._serverId) throw new Error(`QuantelGatewayClient.serverId not set`)
 
 		const servers = await this.getServers(this._zoneId || 'default')
 		const server =
-			_.find(servers, (server) => {
-				return server.ident === this._serverId
+			_.find(servers, (s) => {
+				return s.ident === this._serverId
 			}) || null
 		this._cachedServer = server ? server : undefined
 		return server
@@ -570,6 +580,8 @@ export class QuantelGateway extends EventEmitter {
 		queryParameters?: QueryParameters,
 		bodyData?: object
 	): Promise<T> {
+		if (!this._serverId) throw new Error(`QuantelClient.serverId not set`)
+
 		return this.sendZone<T>(
 			method,
 			`server/${this._serverId}/${resource}`,
