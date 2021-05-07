@@ -1,7 +1,6 @@
 import * as Q from './quantelTypes'
 import * as got from 'got'
 import { EventEmitter } from 'events'
-import * as _ from 'underscore'
 
 const CHECK_STATUS_INTERVAL = 3000
 const CALL_TIMEOUT = 1000
@@ -132,21 +131,21 @@ export class QuantelGateway extends EventEmitter {
 
 				const serverErrors: string[] = []
 
-				_.each(this._monitorPorts, (monitorPort, monitorPortId: string) => {
-					const portExists = _.find(
-						server.portNames || [],
-						(portName) => portName === monitorPortId
-					)
+				for (const [monitorPortId, monitorPort] of Object.entries(this._monitorPorts)) {
+					const portExists = server.portNames
+						? server.portNames.find((portName) => portName === monitorPortId)
+						: undefined
 
+					const realPortNames = server.portNames ? server.portNames.filter(Boolean) : [] // Filter out falsy names
 					if (
 						!portExists && // our port is NOT set up on server
-						_.compact(server.portNames).length === (server.numChannels || 0) // There is no more room on server
+						realPortNames.length === (server.numChannels || 0) // There is no more room on server
 					) {
 						serverErrors.push(
 							`Not able to assign port "${monitorPortId}", due to all ports being already used`
 						)
 					} else {
-						_.each(monitorPort.channels, (monitorChannel) => {
+						for (const monitorChannel of monitorPort.channels) {
 							const channelPort = (server.chanPorts || [])[monitorChannel]
 
 							if (
@@ -157,9 +156,9 @@ export class QuantelGateway extends EventEmitter {
 									`Not able to assign channel to port "${monitorPortId}", the channel ${monitorChannel} is already assigned to another port "${channelPort}"!`
 								)
 							}
-						})
+						}
 					}
-				})
+				}
 				if (serverErrors.length) return serverErrors.join(', ')
 
 				if (!this._initialized) return `Not initialized`
@@ -264,7 +263,7 @@ export class QuantelGateway extends EventEmitter {
 
 		const servers = await this.getServers(this._zoneId || 'default')
 		const server =
-			_.find(servers, (s) => {
+			servers.find((s) => {
 				return s.ident === this._serverId
 			}) || null
 		this._cachedServer = server ? server : undefined
@@ -665,14 +664,14 @@ export class QuantelGateway extends EventEmitter {
 	}
 
 	private urlQuery(url: string, params: QueryParameters = {}): string {
-		const queryString = _.compact(
-			_.map(params, (value, key: string) => {
-				if (value !== undefined) {
-					return `${key}=${encodeURIComponent(value.toString())}`
-				}
-				return null
-			})
-		).join('&')
+		const paramStrs: string[] = []
+		for (const [key, value] of Object.entries(params)) {
+			if (value !== undefined) {
+				paramStrs.push(`${key}=${encodeURIComponent(value.toString())}`)
+			}
+		}
+		const queryString = paramStrs.join('&')
+
 		return url + (queryString ? `?${queryString}` : '')
 	}
 	/**
@@ -710,12 +709,12 @@ export class QuantelGateway extends EventEmitter {
 		const test: QuantelErrorResponse = response as QuantelErrorResponse
 		return !!(
 			test &&
-			_.isObject(test) &&
+			typeof test === 'object' &&
 			Object.prototype.hasOwnProperty.call(test, 'status') &&
 			test.status &&
-			_.isNumber(test.status) &&
-			_.isString(test.message) &&
-			_.isString(test.stack) &&
+			typeof test.status === 'number' &&
+			typeof test.message === 'string' &&
+			typeof test.stack === 'string' &&
 			test.status !== 200
 		)
 	}
