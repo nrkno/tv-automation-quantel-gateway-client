@@ -1,7 +1,6 @@
 import * as Q from './quantelTypes'
 import * as got from 'got'
 import { EventEmitter } from 'events'
-import * as _ from 'underscore'
 
 const CHECK_STATUS_INTERVAL = 3000
 const CALL_TIMEOUT = 1000
@@ -36,7 +35,7 @@ export class QuantelGateway extends EventEmitter {
 	private _monitorInterval: NodeJS.Timer | undefined
 
 	private _statusMessage: string | null = 'Initializing...' // null = all good
-	private _cachedServer?: Q.ServerInfo | undefined
+	private _cachedServer: Q.ServerInfo | undefined
 	private _monitorPorts: MonitorPorts = {}
 	private _connected = false
 
@@ -60,7 +59,7 @@ export class QuantelGateway extends EventEmitter {
 		gatewayUrl: string,
 		ISAUrls: string | string[],
 		zoneId: string | undefined,
-		serverId: number
+		serverId: number | undefined
 	): Promise<void> {
 		this._initialized = false // in case we are called again
 		this._cachedServer = undefined // reset in the event of a second calling
@@ -70,15 +69,13 @@ export class QuantelGateway extends EventEmitter {
 		// Connect to ISA(s):
 		await this.connectToISA(ISAUrls)
 		this._zoneId = zoneId || 'default'
-		this._serverId = serverId
 
 		// TODO: this is not implemented yet in Quantel gw:
 		// const zones = await this.getZones()
 		// const zone = _.find(zones, zone => zone.zoneName === this._zoneId)
 		// if (!zone) throw new Error(`Zone ${this._zoneId} not found!`)
 
-		const server = await this.getServer()
-		if (!server) throw new Error(`Server ${this._serverId} not found!`)
+		await this.setServerId(serverId)
 
 		this._initialized = true
 	}
@@ -124,33 +121,31 @@ export class QuantelGateway extends EventEmitter {
 				this._connected = false
 				if (!this._gatewayUrl) return `Gateway URL not set`
 
-				if (!this._serverId) return `Server id not set`
+				if (!this._serverId) return `QuantelGatewayClient.serverId not set`
+				const server = await this.getServer(true)
 
-				const servers = await this.getServers(this._zoneId || 'default')
-				const server = _.find(servers, (s) => s.ident === this._serverId)
-
-				if (!server) return `Server ${this._serverId} not present on ISA`
-				if (server.down) return `Server ${this._serverId} is down`
+				if (!server) return `Server ${this._serverId} not found on ISA`
+				if (server.down) return `Server ${server.ident} is down`
 
 				this._connected = true
 
 				const serverErrors: string[] = []
 
-				_.each(this._monitorPorts, (monitorPort, monitorPortId: string) => {
-					const portExists = _.find(
-						server.portNames || [],
-						(portName) => portName === monitorPortId
-					)
+				for (const [monitorPortId, monitorPort] of Object.entries(this._monitorPorts)) {
+					const portExists = server.portNames
+						? server.portNames.find((portName) => portName === monitorPortId)
+						: undefined
 
+					const realPortNames = server.portNames ? server.portNames.filter(Boolean) : [] // Filter out falsy names
 					if (
 						!portExists && // our port is NOT set up on server
-						_.compact(server.portNames).length === (server.numChannels || 0) // There is no more room on server
+						realPortNames.length === (server.numChannels || 0) // There is no more room on server
 					) {
 						serverErrors.push(
 							`Not able to assign port "${monitorPortId}", due to all ports being already used`
 						)
 					} else {
-						_.each(monitorPort.channels, (monitorChannel) => {
+						for (const monitorChannel of monitorPort.channels) {
 							const channelPort = (server.chanPorts || [])[monitorChannel]
 
 							if (
@@ -161,9 +156,9 @@ export class QuantelGateway extends EventEmitter {
 									`Not able to assign channel to port "${monitorPortId}", the channel ${monitorChannel} is already assigned to another port "${channelPort}"!`
 								)
 							}
-						})
+						}
 					}
-				})
+				}
 				if (serverErrors.length) return serverErrors.join(', ')
 
 				if (!this._initialized) return `Not initialized`
@@ -219,9 +214,20 @@ export class QuantelGateway extends EventEmitter {
 	public get zoneId(): string {
 		return this._zoneId || 'default'
 	}
+	/** Get the server to be controlled by this client. */
+	public get serverId(): number | undefined {
+		return this._serverId
+	}
 	/** Set the server to be controlled by this client. */
-	public get serverId(): number {
-		return this._serverId || 0
+	public async setServerId(serverId: number | undefined): Promise<void> {
+		this._serverId = serverId
+
+		// If the server is not set, skip this check.
+		// (In some cases, the consumer might not want to provide a serverId (like when only we only want to search, never copy))
+		if (this._serverId) {
+			const server = await this.getServer(true)
+			if (!server) throw new Error(`Server ${this._serverId} not found on ISA!`)
+		}
 	}
 
 	/**
@@ -245,13 +251,20 @@ export class QuantelGateway extends EventEmitter {
 	}
 
 	/** Return the (possibly cached) server */
-	public async getServer(): Promise<Q.ServerInfo | null> {
+	public async getServer(disableCache = false): Promise<Q.ServerInfo | null> {
+		// Invalidate the cache?
+		if (disableCache || this._cachedServer?.ident !== this._serverId) {
+			this._cachedServer = undefined
+		}
+
 		if (this._cachedServer !== undefined) return this._cachedServer
+
+		if (!this._serverId) throw new Error(`QuantelGatewayClient.serverId not set`)
 
 		const servers = await this.getServers(this._zoneId || 'default')
 		const server =
-			_.find(servers, (server) => {
-				return server.ident === this._serverId
+			servers.find((s) => {
+				return s.ident === this._serverId
 			}) || null
 		this._cachedServer = server ? server : undefined
 		return server
@@ -566,6 +579,8 @@ export class QuantelGateway extends EventEmitter {
 		queryParameters?: QueryParameters,
 		bodyData?: object
 	): Promise<T> {
+		if (!this._serverId) throw new Error(`QuantelClient.serverId not set`)
+
 		return this.sendZone<T>(
 			method,
 			`server/${this._serverId}/${resource}`,
@@ -649,14 +664,14 @@ export class QuantelGateway extends EventEmitter {
 	}
 
 	private urlQuery(url: string, params: QueryParameters = {}): string {
-		const queryString = _.compact(
-			_.map(params, (value, key: string) => {
-				if (value !== undefined) {
-					return `${key}=${encodeURIComponent(value.toString())}`
-				}
-				return null
-			})
-		).join('&')
+		const paramStrs: string[] = []
+		for (const [key, value] of Object.entries(params)) {
+			if (value !== undefined) {
+				paramStrs.push(`${key}=${encodeURIComponent(value.toString())}`)
+			}
+		}
+		const queryString = paramStrs.join('&')
+
 		return url + (queryString ? `?${queryString}` : '')
 	}
 	/**
@@ -694,12 +709,12 @@ export class QuantelGateway extends EventEmitter {
 		const test: QuantelErrorResponse = response as QuantelErrorResponse
 		return !!(
 			test &&
-			_.isObject(test) &&
+			typeof test === 'object' &&
 			Object.prototype.hasOwnProperty.call(test, 'status') &&
 			test.status &&
-			_.isNumber(test.status) &&
-			_.isString(test.message) &&
-			_.isString(test.stack) &&
+			typeof test.status === 'number' &&
+			typeof test.message === 'string' &&
+			typeof test.stack === 'string' &&
 			test.status !== 200
 		)
 	}
