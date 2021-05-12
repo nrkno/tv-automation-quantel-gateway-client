@@ -1,6 +1,6 @@
 {
 	"name": "tv-automation-quantel-gateway-client",
-	"version": "2.0.1",
+	"version": "2.0.2",
 	"description": "Quantel gateway client library",
 	"engines": {
 		"node": ">=10.20.1"

@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+### [2.0.2](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v2.0.1...v2.0.2) (2021-05-12)
+
+
+### Bug Fixes
+
+* dont require serverId ([a6ca5a2](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/a6ca5a277b9a8db2d4d76eeb196052a3143f2674))
+* make serverId be settable during the lifetime of the QuantelGateway class ([a4b66b5](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/a4b66b551ca51e8c63d8bf2ebe180f8bee79792c))
+* refactor to remove the underscore dependency ([adaa6ab](https://github.com/nrkno/tv-automation-quantel-gateway-client/commit/adaa6ab0f66f9a2132c981f04860ef3fc91f7acc))
+
 ### [2.0.1](https://github.com/nrkno/tv-automation-quantel-gateway-client/compare/v2.0.0...v2.0.1) (2021-03-19)
 
 
